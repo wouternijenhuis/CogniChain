@@ -42,7 +42,6 @@ public class RetryPolicy
 public class RetryHandler
 {
     private readonly RetryPolicy _policy;
-    private static readonly Random _random = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RetryHandler"/> class.
@@ -85,10 +84,10 @@ public class RetryHandler
                 // Calculate delay with exponential backoff
                 var currentDelay = Math.Min(delay, _policy.MaxDelayMs);
 
-                // Add jitter if enabled
+                // Add jitter if enabled (using Random.Shared for thread-safety)
                 if (_policy.UseJitter)
                 {
-                    currentDelay = _random.Next((int)(currentDelay * 0.5), (int)(currentDelay * 1.5));
+                    currentDelay = Random.Shared.Next((int)(currentDelay * 0.5), (int)(currentDelay * 1.5));
                 }
 
                 await Task.Delay(currentDelay, cancellationToken);

@@ -38,54 +38,16 @@ public class PromptTemplate
         if (variables == null)
             throw new ArgumentNullException(nameof(variables));
 
-        // Validate that all required variables are provided
+        var result = _template;
         foreach (var variable in _variables)
         {
-            if (!variables.ContainsKey(variable))
+            if (!variables.TryGetValue(variable, out var value))
                 throw new ArgumentException($"Missing value for variable: {variable}");
+
+            result = result.Replace($"{{{variable}}}", value);
         }
 
-        // Build the result in a single pass to avoid repeated string replacements
-        var template = _template;
-        var sb = new System.Text.StringBuilder(template.Length);
-
-        for (int i = 0; i < template.Length; i++)
-        {
-            var c = template[i];
-            if (c == '{')
-            {
-                int end = template.IndexOf('}', i + 1);
-                if (end > i + 1)
-                {
-                    var name = template.Substring(i + 1, end - i - 1);
-                    if (variables.TryGetValue(name, out var value))
-                    {
-                        sb.Append(value);
-                        i = end;
-
-        // First, collect all missing variables to provide a comprehensive error message.
-        var missingVariables = new List<string>();
-        foreach (var variable in _variables)
-        {
-            if (!variables.ContainsKey(variable))
-            {
-                missingVariables.Add(variable);
-            }
-        }
-
-        if (missingVariables.Count > 0)
-        {
-            throw new ArgumentException(
-                $"Missing value for variable(s): {string.Join(", ", missingVariables)}");
-        }
-
-        // All variables are present; perform the substitutions.
-        foreach (var variable in _variables)
-        {
-            sb.Append(c);
-        }
-
-        return sb.ToString();
+        return result;
     }
 
     /// <summary>
@@ -93,6 +55,13 @@ public class PromptTemplate
     /// </summary>
     /// <param name="variables">Object with properties matching variable names.</param>
     /// <returns>The formatted prompt string.</returns>
+    /// <remarks>
+    /// Property values are converted to strings using ToString(). For complex objects,
+    /// this may produce unexpected results (e.g., "Namespace.TypeName" instead of meaningful content).
+    /// For complex objects, consider using Format(Dictionary&lt;string, string&gt;) and provide
+    /// custom string formatting, or ensure your objects override ToString() appropriately.
+    /// Only public readable properties are used.
+    /// </remarks>
     public string Format(object variables)
     {
         if (variables == null)

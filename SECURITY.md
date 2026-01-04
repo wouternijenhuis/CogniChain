@@ -180,7 +180,7 @@ We follow responsible disclosure:
 
 For security-related questions or concerns:
 
-- 🔒 Security issues: [INSERT SECURITY EMAIL]
+- 🔒 Security issues: security@cognichain.io
 - 💬 General questions: [GitHub Discussions](https://github.com/wouternijenhuis/CogniChain/discussions)
 
 ## Recognition
