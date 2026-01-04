@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>CogniChain</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Wouter Nijenhuis</Authors>
+    <Company>Wouter Nijenhuis</Company>
+    <Description>A .NET library for orchestrating LLM workflows with prompt templates, chains, tools, memory, retries, and streaming support.</Description>
+    <PackageTags>LLM;AI;OpenAI;ChatGPT;Chains;Prompts;Agent;Orchestration</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/wouternijenhuis/CogniChain</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/wouternijenhuis/CogniChain</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
