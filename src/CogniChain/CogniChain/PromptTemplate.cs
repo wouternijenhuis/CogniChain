@@ -38,16 +38,39 @@ public class PromptTemplate
         if (variables == null)
             throw new ArgumentNullException(nameof(variables));
 
-        var result = _template;
+        // Validate that all required variables are provided
         foreach (var variable in _variables)
         {
-            if (!variables.TryGetValue(variable, out var value))
+            if (!variables.ContainsKey(variable))
                 throw new ArgumentException($"Missing value for variable: {variable}");
-
-            result = result.Replace($"{{{variable}}}", value);
         }
 
-        return result;
+        // Build the result in a single pass to avoid repeated string replacements
+        var template = _template;
+        var sb = new System.Text.StringBuilder(template.Length);
+
+        for (int i = 0; i < template.Length; i++)
+        {
+            var c = template[i];
+            if (c == '{')
+            {
+                int end = template.IndexOf('}', i + 1);
+                if (end > i + 1)
+                {
+                    var name = template.Substring(i + 1, end - i - 1);
+                    if (variables.TryGetValue(name, out var value))
+                    {
+                        sb.Append(value);
+                        i = end;
+                        continue;
+                    }
+                }
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
