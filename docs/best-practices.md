@@ -255,6 +255,9 @@ public class CachedLLMStep : IChainStep
     
     private static string ComputeStableHash(string input)
     {
+        if (string.IsNullOrEmpty(input))
+            return "empty";
+            
         using var sha256 = SHA256.Create();
         var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
         return Convert.ToBase64String(bytes);
@@ -289,21 +292,26 @@ public class TokenTrackingStep : IChainStep
 ### Sanitize User Input
 
 ```csharp
-public string SanitizeInput(string userInput)
+public class InputSanitizer
 {
-    if (string.IsNullOrWhiteSpace(userInput))
-        return string.Empty;
+    private const int MaxInputLength = 4000; // Reasonable limit for most LLM contexts
     
-    // Length limit to prevent excessive token usage
-    if (userInput.Length > 4000)
+    public string SanitizeInput(string userInput)
     {
-        userInput = userInput.Substring(0, 4000);
+        if (string.IsNullOrWhiteSpace(userInput))
+            return string.Empty;
+        
+        // Length limit to prevent excessive token usage
+        if (userInput.Length > MaxInputLength)
+        {
+            userInput = userInput.Substring(0, MaxInputLength);
+        }
+        
+        // Normalize whitespace
+        userInput = System.Text.RegularExpressions.Regex.Replace(userInput, @"\s+", " ");
+        
+        return userInput.Trim();
     }
-    
-    // Normalize whitespace
-    userInput = System.Text.RegularExpressions.Regex.Replace(userInput, @"\s+", " ");
-    
-    return userInput.Trim();
 }
 
 // Note: Prompt injection is difficult to prevent with simple filtering.
@@ -325,6 +333,8 @@ orchestrator.Memory.AddUserMessage(userInput); // Keep separate
 ```csharp
 public class InputValidator
 {
+    private const int MaxInputLength = 4000; // Configurable based on your LLM's context window
+    
     private static readonly string[] SuspiciousPatterns = 
     {
         "ignore previous",
@@ -338,7 +348,7 @@ public class InputValidator
     public ValidationResult ValidateInput(string input)
     {
         // Check length
-        if (input.Length > 4000)
+        if (input.Length > MaxInputLength)
             return ValidationResult.Fail("Input too long");
         
         // Check for suspicious patterns (case-insensitive)
