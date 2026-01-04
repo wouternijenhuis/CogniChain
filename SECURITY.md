@@ -19,7 +19,7 @@ We take the security of CogniChain seriously. If you discover a security vulnera
 
 ### Do
 
-1. **Email** the security team at: [INSERT SECURITY EMAIL]
+1. **Email** the security team at: security@cognichain.io
 2. **Include** as much information as possible:
    - Type of vulnerability
    - Affected components/versions
