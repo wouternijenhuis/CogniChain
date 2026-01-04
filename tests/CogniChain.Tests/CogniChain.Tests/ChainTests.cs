@@ -77,7 +77,7 @@ public class ChainTests
         var chunks = new List<string>();
 
         // Act
-        var result = await chain.RunStreamingAsync("test", chunk => chunks.Add(chunk));
+        await chain.RunStreamingAsync("test", chunk => chunks.Add(chunk));
 
         // Assert
         Assert.Equal(2, chunks.Count);
