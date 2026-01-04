@@ -331,9 +331,14 @@ orchestrator.Memory.AddUserMessage(userInput); // Keep separate
 **Better Approach: Input Validation**
 
 ```csharp
+// This is an illustrative example showing the pattern.
+// Adapt to your specific needs and security requirements.
+
 public class InputValidator
 {
     private const int MaxInputLength = 4000; // Configurable based on your LLM's context window
+    private readonly ILogger _logger;
+    private readonly bool _strictMode;
     
     private static readonly string[] SuspiciousPatterns = 
     {
@@ -368,6 +373,19 @@ public class InputValidator
         
         return ValidationResult.Success(input);
     }
+    
+    private bool IsAllowedContent(string input)
+    {
+        // Implement your allowlist logic here
+        return true;
+    }
+}
+
+// Simple ValidationResult record
+public record ValidationResult(bool IsValid, string? ErrorMessage = null)
+{
+    public static ValidationResult Success(string input) => new(true);
+    public static ValidationResult Fail(string error) => new(false, error);
 }
 ```
 
@@ -417,16 +435,23 @@ var apiKey = configuration["OpenAI:ApiKey"];
 ```csharp
 public class RateLimitedChatService
 {
+    private const int MaxRequestsPerMinute = 10;
     private readonly Dictionary<string, Queue<DateTime>> _userRequests = new();
     
     public async Task<string> ChatAsync(string userId, string message)
     {
-        if (!IsWithinRateLimit(userId, maxPerMinute: 10))
+        if (!IsWithinRateLimit(userId, MaxRequestsPerMinute))
         {
             return "Rate limit exceeded. Please wait.";
         }
         
         return await ProcessMessageAsync(message);
+    }
+    
+    private bool IsWithinRateLimit(string userId, int maxRequests)
+    {
+        // Implementation left as exercise - track requests per user
+        return true;
     }
 }
 ```
@@ -552,7 +577,8 @@ public class MonitoredLLMStep : IChainStep
 ```csharp
 public class RateLimitedLLMStep : IChainStep
 {
-    private readonly SemaphoreSlim _semaphore = new(10); // Max concurrent calls
+    private const int MaxConcurrentCalls = 10;
+    private readonly SemaphoreSlim _semaphore = new(MaxConcurrentCalls);
     
     public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
     {

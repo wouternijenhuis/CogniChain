@@ -398,8 +398,11 @@ public class LocalLLMStep : IChainStep
             ct
         );
         
-        var result = await response.Content.ReadFromJsonAsync<LocalLLMResponse>(ct);
-        return new ChainResult { Output = result.Response, Success = true };
+        // Parse response based on your local LLM's API format
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+        var output = result.GetProperty("response").GetString() ?? string.Empty;
+        
+        return new ChainResult { Output = output, Success = true };
     }
 }
 ```
