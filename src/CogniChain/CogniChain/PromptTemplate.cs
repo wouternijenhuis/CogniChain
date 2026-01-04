@@ -62,11 +62,26 @@ public class PromptTemplate
                     {
                         sb.Append(value);
                         i = end;
-                        continue;
-                    }
-                }
-            }
 
+        // First, collect all missing variables to provide a comprehensive error message.
+        var missingVariables = new List<string>();
+        foreach (var variable in _variables)
+        {
+            if (!variables.ContainsKey(variable))
+            {
+                missingVariables.Add(variable);
+            }
+        }
+
+        if (missingVariables.Count > 0)
+        {
+            throw new ArgumentException(
+                $"Missing value for variable(s): {string.Join(", ", missingVariables)}");
+        }
+
+        // All variables are present; perform the substitutions.
+        foreach (var variable in _variables)
+        {
             sb.Append(c);
         }
 
