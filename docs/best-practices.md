@@ -1,12 +1,28 @@
-# Best Practices for CogniChain
+# Best Practices for Building LLM Applications with CogniChain
 
-## General Guidelines
+> Production-ready patterns and tips for .NET developers using CogniChain
 
-### 1. Use Dependency Injection
+## Table of Contents
 
-Register CogniChain components in your DI container:
+1. [Getting Started Right](#getting-started-right)
+2. [Prompt Engineering](#prompt-engineering)
+3. [Memory Management](#memory-management)
+4. [Error Handling & Resilience](#error-handling--resilience)
+5. [Performance](#performance)
+6. [Security](#security)
+7. [Testing](#testing)
+8. [Production Deployment](#production-deployment)
+
+---
+
+## Getting Started Right
+
+### Use Dependency Injection
+
+Register CogniChain as a singleton:
 
 ```csharp
+// Program.cs
 services.AddSingleton<LLMOrchestrator>(sp => 
     new LLMOrchestrator(new OrchestratorConfig
     {
@@ -15,326 +31,367 @@ services.AddSingleton<LLMOrchestrator>(sp =>
     }));
 ```
 
-### 2. Configure Retry Policies Appropriately
-
-Match retry configuration to your use case:
+### Structure Your Code
 
 ```csharp
-// For user-facing applications - fast failure
-var userFacingPolicy = new RetryPolicy
+// Keep LLM logic in dedicated services
+public class ChatService
+{
+    private readonly LLMOrchestrator _orchestrator;
+    
+    public ChatService(LLMOrchestrator orchestrator)
+    {
+        _orchestrator = orchestrator;
+    }
+    
+    public async Task<string> ChatAsync(string message)
+    {
+        _orchestrator.Memory.AddUserMessage(message);
+        // ... handle LLM call
+    }
+}
+```
+
+---
+
+## Prompt Engineering
+
+### Be Specific and Clear
+
+```csharp
+// ❌ Bad
+var template = new PromptTemplate("Do {task}");
+
+// ✅ Good
+var template = new PromptTemplate(@"
+Role: {role}
+Task: {task}
+Format: {format}
+Constraints: {constraints}");
+```
+
+### Use System Messages for Behavior
+
+```csharp
+orchestrator.Memory.AddSystemMessage(@"
+You are a professional coding assistant.
+- Provide code examples
+- Explain your reasoning
+- Keep responses concise");
+```
+
+### Validate Inputs
+
+```csharp
+public string SafeFormat(PromptTemplate template, Dictionary<string, string> vars)
+{
+    foreach (var key in template.Variables)
+    {
+        if (!vars.ContainsKey(key))
+            throw new ArgumentException($"Missing: {key}");
+    }
+    return template.Format(vars);
+}
+```
+
+---
+
+## Memory Management
+
+### Choose Appropriate Limits
+
+```csharp
+// Chatbot - keep context
+var chatMemory = new ConversationMemory(maxMessages: 20);
+
+// Q&A - minimal history
+var qaMemory = new ConversationMemory(maxMessages: 2);
+
+// Document analysis - larger window
+var docMemory = new ConversationMemory(maxMessages: 50);
+```
+
+### Clear Memory When Needed
+
+```csharp
+// New topic/user
+if (newConversation)
+{
+    orchestrator.Memory.Clear();
+    orchestrator.Memory.AddSystemMessage(systemPrompt);
+}
+
+// Periodic cleanup in long conversations
+if (orchestrator.Memory.Messages.Count > 100)
+{
+    var recent = orchestrator.Memory.GetLastMessages(20);
+    orchestrator.Memory.Clear();
+    foreach (var msg in recent)
+    {
+        orchestrator.Memory.AddMessage(msg.Role, msg.Content);
+    }
+}
+```
+
+### System Messages Are Preserved
+
+```csharp
+// System messages survive trimming
+memory.AddSystemMessage("Important context");
+// ... add 100 user messages ...
+// System message is still there!
+```
+
+---
+
+## Error Handling & Resilience
+
+### Configure Retry Policies by Use Case
+
+```csharp
+// User-facing - fail fast
+var userPolicy = new RetryPolicy
 {
     MaxRetries = 2,
     InitialDelayMs = 500,
     MaxDelayMs = 5000
 };
 
-// For background processing - more resilient
+// Background jobs - more resilient
 var backgroundPolicy = new RetryPolicy
 {
     MaxRetries = 5,
     InitialDelayMs = 2000,
-    MaxDelayMs = 60000
+    MaxDelayMs = 60000,
+    UseJitter = true
 };
 ```
 
-### 3. Manage Memory Wisely
-
-Set appropriate conversation history limits:
+### Handle Chain Failures Gracefully
 
 ```csharp
-// For chatbots with context
-var chatMemory = new ConversationMemory(maxMessages: 20);
-
-// For one-shot operations
-var oneShot = new ConversationMemory(maxMessages: 1);
-
-// For long-running conversations with summarization
-var smartMemory = new ConversationMemory(maxMessages: 50);
+public async Task<string> ProcessWithFallback(string input)
+{
+    var result = await chain.RunAsync(input);
+    
+    if (!result.Success)
+    {
+        _logger.LogWarning("Chain failed: {Error}", result.ErrorMessage);
+        return GetFallbackResponse(input);
+    }
+    
+    return result.Output;
+}
 ```
 
-### 4. Use Cancellation Tokens
-
-Always pass cancellation tokens for responsive applications:
+### Use CancellationTokens
 
 ```csharp
+// Give users control
 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-var result = await chain.RunAsync(input, cts.Token);
-```
 
-## Prompt Templates
-
-### DO: Use Clear Variable Names
-
-```csharp
-// Good
-var template = new PromptTemplate(
-    "Analyze the {document_type} for {company_name} from {year}");
-
-// Bad
-var template = new PromptTemplate(
-    "Analyze the {x} for {y} from {z}");
-```
-
-### DO: Validate Variables Before Formatting
-
-```csharp
-var variables = GetVariablesFromUser();
-if (template.Variables.All(v => variables.ContainsKey(v)))
-{
-    var prompt = template.Format(variables);
-}
-```
-
-### DON'T: Include Sensitive Data in Templates
-
-```csharp
-// Bad
-var template = new PromptTemplate("API Key: {apiKey}");
-
-// Good - handle sensitive data separately
-var securePrompt = BuildSecurePrompt(apiKey);
-```
-
-## Chain Design
-
-### DO: Keep Steps Focused
-
-Each step should have a single responsibility:
-
-```csharp
-// Good
-var chain = Chain.Create()
-    .AddStep(new ExtractDataStep())
-    .AddStep(new ValidateDataStep())
-    .AddStep(new TransformDataStep())
-    .AddStep(new FormatOutputStep());
-
-// Bad
-var chain = Chain.Create()
-    .AddStep(new DoEverythingStep());
-```
-
-### DO: Handle Errors Gracefully
-
-```csharp
-public class ResilientStep : IChainStep
-{
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        try
-        {
-            var output = await ProcessAsync(input, ct);
-            return new ChainResult { Output = output, Success = true };
-        }
-        catch (Exception ex)
-        {
-            return new ChainResult 
-            { 
-                Success = false, 
-                ErrorMessage = $"Processing failed: {ex.Message}" 
-            };
-        }
-    }
-}
-```
-
-### DO: Add Metadata for Observability
-
-```csharp
-return new ChainResult
-{
-    Output = result,
-    Success = true,
-    Metadata = new Dictionary<string, object>
-    {
-        ["duration_ms"] = stopwatch.ElapsedMilliseconds,
-        ["tokens_used"] = tokenCount,
-        ["step_name"] = "ProcessingStep"
-    }
-};
-```
-
-## Tool Development
-
-### DO: Provide Clear Descriptions
-
-```csharp
-public class WeatherTool : ToolBase
-{
-    public override string Name => "get_weather";
-    
-    // Good - clear and specific
-    public override string Description => 
-        "Gets current weather for a city. Input format: 'city,country_code' (e.g., 'London,UK')";
-    
-    // Bad - vague
-    // public override string Description => "Gets weather";
-}
-```
-
-### DO: Validate Tool Input
-
-```csharp
-public override async Task<string> ExecuteAsync(string input, CancellationToken ct)
-{
-    if (string.IsNullOrWhiteSpace(input))
-        return "Error: City name required";
-    
-    if (!IsValidCityFormat(input))
-        return "Error: Use format 'City,CountryCode'";
-    
-    // Process valid input
-    return await GetWeatherAsync(input, ct);
-}
-```
-
-### DO: Handle Tool Failures
-
-```csharp
-public override async Task<string> ExecuteAsync(string input, CancellationToken ct)
-{
-    try
-    {
-        return await ExecuteInternalAsync(input, ct);
-    }
-    catch (HttpRequestException ex)
-    {
-        return $"Weather service unavailable: {ex.Message}";
-    }
-    catch (Exception ex)
-    {
-        return $"Error retrieving weather: {ex.Message}";
-    }
-}
-```
-
-## Memory Management
-
-### DO: Clear Memory When Appropriate
-
-```csharp
-// At the end of a conversation
-memory.Clear();
-
-// When switching contexts
-if (newTopic != currentTopic)
-{
-    memory.Clear();
-    memory.AddSystemMessage($"Now discussing: {newTopic}");
-}
-```
-
-### DO: Use System Messages Effectively
-
-```csharp
-// Set behavior and constraints
-memory.AddSystemMessage("You are a helpful coding assistant.");
-memory.AddSystemMessage("Always include code examples.");
-memory.AddSystemMessage("Format code using markdown.");
-```
-
-### DON'T: Store Excessive History
-
-```csharp
-// Bad - unbounded growth
-var memory = new ConversationMemory(); // maxMessages = -1
-
-// Good - bounded with reasonable limit
-var memory = new ConversationMemory(maxMessages: 20);
-```
-
-## Streaming
-
-### DO: Provide User Feedback
-
-```csharp
-await streamingHandler.ProcessStreamAsync(stream, chunk =>
-{
-    Console.Write(chunk);
-    statusIndicator.Update(); // Keep user informed
-});
-```
-
-### DO: Handle Streaming Errors
-
-```csharp
 try
 {
-    await streamingHandler.ProcessStreamAsync(stream, chunk => ProcessChunk(chunk));
+    var result = await chain.RunAsync(input, cts.Token);
 }
 catch (OperationCanceledException)
 {
-    Console.WriteLine("\nStreaming cancelled by user");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"\nStreaming error: {ex.Message}");
+    return "Request timed out";
 }
 ```
 
-## Orchestrator Usage
+---
 
-### DO: Configure Once, Use Many Times
+## Performance
+
+### Reuse Orchestrator Instances
 
 ```csharp
-// Setup phase
-var orchestrator = new LLMOrchestrator(config);
-orchestrator.Tools.RegisterTool(new CalculatorTool());
-orchestrator.Tools.RegisterTool(new SearchTool());
-orchestrator.Memory.AddSystemMessage("You are a helpful assistant.");
+// ✅ Good - reuse
+private static readonly LLMOrchestrator _orchestrator = new();
 
-// Use phase (multiple times)
-for (var userInput in userInputs)
+// ❌ Bad - create each time
+public async Task Process()
 {
-    var result = await orchestrator.ExecuteChainAsync(chain, userInput);
+    var orchestrator = new LLMOrchestrator(); // Don't do this
 }
 ```
 
-### DO: Use Workflow Builder for Complex Scenarios
+### Use Streaming for Long Responses
 
 ```csharp
-var result = await orchestrator.CreateWorkflow()
-    .WithPrompt(template)
-    .WithVariables(variables)
-    .AddStep(new ValidationStep())
-    .AddStep(new ProcessingStep())
-    .AddStep(new FormattingStep())
-    .ExecuteAsync();
+// Better UX with streaming
+await streamingHandler.ProcessStreamAsync(
+    llmStream,
+    chunk => UpdateUI(chunk) // Real-time updates
+);
 ```
+
+### Cache Expensive Operations
+
+```csharp
+public class CachedLLMStep : IChainStep
+{
+    private readonly IMemoryCache _cache;
+    
+    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
+    {
+        var cacheKey = $"llm:{input.GetHashCode()}";
+        
+        if (_cache.TryGetValue(cacheKey, out string cachedResult))
+        {
+            return new ChainResult { Output = cachedResult, Success = true };
+        }
+        
+        var result = await CallLLMAsync(input, ct);
+        _cache.Set(cacheKey, result, TimeSpan.FromHours(1));
+        
+        return new ChainResult { Output = result, Success = true };
+    }
+}
+```
+
+### Monitor Token Usage
+
+```csharp
+public class TokenTrackingStep : IChainStep
+{
+    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
+    {
+        var response = await _llmClient.CallAsync(input);
+        
+        _metrics.TrackTokens(response.TokensUsed);
+        
+        return new ChainResult
+        {
+            Output = response.Text,
+            Metadata = { ["tokens"] = response.TokensUsed }
+        };
+    }
+}
+```
+
+---
+
+## Security
+
+### Sanitize User Input
+
+```csharp
+public string SanitizeInput(string userInput)
+{
+    // Remove potential prompt injection attempts
+    userInput = userInput.Replace("\\n\\nSystem:", "");
+    userInput = userInput.Replace("Ignore previous instructions", "");
+    
+    // Length limit
+    if (userInput.Length > 4000)
+    {
+        userInput = userInput.Substring(0, 4000);
+    }
+    
+    return userInput;
+}
+```
+
+### Never Log Sensitive Data
+
+```csharp
+// ❌ Bad
+_logger.LogInformation("Processing: {Input}", apiKey);
+
+// ✅ Good
+_logger.LogInformation("Processing request");
+```
+
+### Validate Tool Outputs
+
+```csharp
+public class SecureDatabaseTool : ToolBase
+{
+    public override async Task<string> ExecuteAsync(string input, CancellationToken ct)
+    {
+        // Validate SQL query
+        if (IsDangerousQuery(input))
+        {
+            return "Error: Invalid query";
+        }
+        
+        var result = await _db.QueryAsync(input);
+        
+        // Sanitize output
+        return SanitizeOutput(result);
+    }
+}
+```
+
+### Use Environment Variables for Secrets
+
+```csharp
+// ✅ Good
+var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+
+// Or use .NET Secret Manager in development
+var apiKey = configuration["OpenAI:ApiKey"];
+```
+
+### Rate Limit User Requests
+
+```csharp
+public class RateLimitedChatService
+{
+    private readonly Dictionary<string, Queue<DateTime>> _userRequests = new();
+    
+    public async Task<string> ChatAsync(string userId, string message)
+    {
+        if (!IsWithinRateLimit(userId, maxPerMinute: 10))
+        {
+            return "Rate limit exceeded. Please wait.";
+        }
+        
+        return await ProcessMessageAsync(message);
+    }
+}
+```
+
+---
 
 ## Testing
 
-### DO: Test Chain Steps Independently
+### Test Chain Steps Independently
 
 ```csharp
 [Fact]
-public async Task MyStep_ProcessesInputCorrectly()
+public async Task LLMCallStep_ReturnsValidResponse()
 {
-    var step = new MyStep();
+    var step = new LLMCallStep(mockClient);
     var result = await step.ExecuteAsync("test input");
     
     Assert.True(result.Success);
-    Assert.Equal("expected output", result.Output);
+    Assert.NotEmpty(result.Output);
 }
 ```
 
-### DO: Mock External Dependencies
+### Mock External Dependencies
 
 ```csharp
-public class MyTool : ToolBase
+public class TestableStep : IChainStep
 {
-    private readonly IExternalService _service;
+    private readonly ILLMClient _client;
     
-    public MyTool(IExternalService service)
+    public TestableStep(ILLMClient client)
     {
-        _service = service;
+        _client = client; // Inject for testing
     }
-    
-    // Now you can mock IExternalService in tests
 }
+
+// In tests
+var mockClient = new Mock<ILLMClient>();
+mockClient.Setup(c => c.CallAsync(It.IsAny<string>()))
+          .ReturnsAsync("test response");
 ```
 
-### DO: Test Error Scenarios
+### Test Error Scenarios
 
 ```csharp
 [Fact]
@@ -350,34 +407,199 @@ public async Task Chain_HandlesStepFailure()
 }
 ```
 
-## Performance
-
-### DO: Reuse Instances
+### Use Simulated Streaming
 
 ```csharp
-// Good - reuse
-private static readonly LLMOrchestrator _orchestrator = new();
-
-// Bad - create each time
-public async Task Process() 
+[Fact]
+public async Task StreamingHandler_ProcessesChunks()
 {
-    var orchestrator = new LLMOrchestrator();
-    // ...
+    var handler = new StreamingHandler();
+    var chunks = new List<string>();
+    
+    var stream = StreamingHandler.SimulateStreamAsync(
+        "test content", 
+        chunkSize: 5
+    );
+    
+    await handler.ProcessStreamAsync(
+        stream, 
+        chunk => chunks.Add(chunk)
+    );
+    
+    Assert.True(chunks.Count > 1);
 }
 ```
 
-### DO: Use Streaming for Large Outputs
+---
+
+## Production Deployment
+
+### Monitor and Log
 
 ```csharp
-// Good - streaming for responsive UI
-await chain.RunStreamingAsync(input, chunk => ui.Update(chunk));
-
-// Bad - wait for complete response
-var result = await chain.RunAsync(input);
-ui.Update(result.Output); // User waits
+public class MonitoredLLMStep : IChainStep
+{
+    private readonly ILogger _logger;
+    private readonly IMetrics _metrics;
+    
+    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        
+        try
+        {
+            var result = await CallLLMAsync(input, ct);
+            
+            _metrics.RecordSuccess(sw.ElapsedMilliseconds);
+            _logger.LogInformation("LLM call succeeded in {Ms}ms", sw.ElapsedMilliseconds);
+            
+            return new ChainResult { Output = result, Success = true };
+        }
+        catch (Exception ex)
+        {
+            _metrics.RecordFailure();
+            _logger.LogError(ex, "LLM call failed");
+            
+            return new ChainResult 
+            { 
+                Success = false, 
+                ErrorMessage = "Service temporarily unavailable" 
+            };
+        }
+    }
+}
 ```
 
-### DON'T: Block Async Code
+### Handle API Rate Limits
+
+```csharp
+public class RateLimitedLLMStep : IChainStep
+{
+    private readonly SemaphoreSlim _semaphore = new(10); // Max concurrent calls
+    
+    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
+    {
+        await _semaphore.WaitAsync(ct);
+        
+        try
+        {
+            return await CallLLMAsync(input, ct);
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+}
+```
+
+### Circuit Breaker Pattern
+
+```csharp
+public class ResilientLLMStep : IChainStep
+{
+    private int _failureCount = 0;
+    private DateTime? _circuitOpenedAt;
+    
+    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
+    {
+        // Check if circuit is open
+        if (_circuitOpenedAt.HasValue && 
+            DateTime.UtcNow - _circuitOpenedAt.Value < TimeSpan.FromMinutes(5))
+        {
+            return new ChainResult 
+            { 
+                Success = false, 
+                ErrorMessage = "Service temporarily unavailable" 
+            };
+        }
+        
+        try
+        {
+            var result = await CallLLMAsync(input, ct);
+            _failureCount = 0; // Reset on success
+            return new ChainResult { Output = result, Success = true };
+        }
+        catch (Exception)
+        {
+            _failureCount++;
+            
+            if (_failureCount >= 5)
+            {
+                _circuitOpenedAt = DateTime.UtcNow;
+            }
+            
+            throw;
+        }
+    }
+}
+```
+
+### Configuration Management
+
+```csharp
+// appsettings.json
+{
+  "CogniChain": {
+    "MaxConversationHistory": 20,
+    "Retry": {
+      "MaxRetries": 3,
+      "InitialDelayMs": 1000
+    }
+  }
+}
+
+// Startup
+services.AddSingleton<LLMOrchestrator>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    
+    return new LLMOrchestrator(new OrchestratorConfig
+    {
+        MaxConversationHistory = config.GetValue<int>("CogniChain:MaxConversationHistory"),
+        RetryPolicy = new RetryPolicy
+        {
+            MaxRetries = config.GetValue<int>("CogniChain:Retry:MaxRetries"),
+            InitialDelayMs = config.GetValue<int>("CogniChain:Retry:InitialDelayMs")
+        }
+    });
+});
+```
+
+### Health Checks
+
+```csharp
+public class LLMHealthCheck : IHealthCheck
+{
+    private readonly LLMOrchestrator _orchestrator;
+    
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context, 
+        CancellationToken ct)
+    {
+        try
+        {
+            // Simple ping test
+            var chain = Chain.Create().AddStep(new SimpleLLMStep());
+            var result = await chain.RunAsync("ping", ct);
+            
+            return result.Success 
+                ? HealthCheckResult.Healthy("LLM service responding")
+                : HealthCheckResult.Degraded("LLM service slow");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("LLM service unavailable", ex);
+        }
+    }
+}
+```
+
+---
+
+## Common Pitfalls to Avoid
+
+### ❌ Don't Block Async Code
 
 ```csharp
 // Bad
@@ -387,31 +609,64 @@ var result = chain.RunAsync(input).Result;
 var result = await chain.RunAsync(input);
 ```
 
-## Security
-
-### DO: Sanitize User Input
+### ❌ Don't Store Unlimited History
 
 ```csharp
-var sanitized = SanitizeInput(userInput);
-var result = await chain.RunAsync(sanitized);
+// Bad - memory leak
+var memory = new ConversationMemory(); // No limit
+
+// Good
+var memory = new ConversationMemory(maxMessages: 20);
 ```
 
-### DO: Validate Tool Outputs
-
-```csharp
-public override async Task<string> ExecuteAsync(string input, CancellationToken ct)
-{
-    var output = await GetDataAsync(input, ct);
-    return ValidateAndSanitize(output);
-}
-```
-
-### DON'T: Log Sensitive Information
+### ❌ Don't Ignore Cancellation
 
 ```csharp
 // Bad
-_logger.LogInformation("Processing: {Input}", apiKey);
+public async Task<string> ProcessAsync(string input)
+{
+    return await chain.RunAsync(input); // No cancellation
+}
 
 // Good
-_logger.LogInformation("Processing request");
+public async Task<string> ProcessAsync(string input, CancellationToken ct)
+{
+    return await chain.RunAsync(input, ct);
+}
 ```
+
+### ❌ Don't Hardcode Prompts in Code
+
+```csharp
+// Bad
+var prompt = "You are a helpful assistant. Answer: " + userQuestion;
+
+// Good
+var template = new PromptTemplate(@"
+You are a helpful assistant.
+Question: {question}
+");
+var prompt = template.Format(new { question = userQuestion });
+```
+
+---
+
+## Quick Reference
+
+| Scenario | Recommended Pattern |
+|----------|-------------------|
+| Chatbot | `ConversationMemory(20)` + streaming |
+| Content generation | Chain with validation steps |
+| Function calling | `ToolRegistry` + retry logic |
+| Long operations | Cancellation tokens + timeouts |
+| Production API | Rate limiting + circuit breakers |
+| Testing | Mock `IChainStep` and `ITool` |
+
+---
+
+## See Also
+
+- [API Reference](api-reference.md) - Complete API documentation
+- [Architecture Guide](architecture.md) - Internal design patterns
+- [Examples](../examples/) - Working code samples
+
