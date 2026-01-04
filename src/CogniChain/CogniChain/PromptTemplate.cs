@@ -41,10 +41,10 @@ public class PromptTemplate
         var result = _template;
         foreach (var variable in _variables)
         {
-            if (!variables.ContainsKey(variable))
+            if (!variables.TryGetValue(variable, out var value))
                 throw new ArgumentException($"Missing value for variable: {variable}");
 
-            result = result.Replace($"{{{variable}}}", variables[variable]);
+            result = result.Replace($"{{{variable}}}", value);
         }
 
         return result;
