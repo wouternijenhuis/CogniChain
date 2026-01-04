@@ -50,11 +50,32 @@ public class ToolRegistry
     /// Registers a tool.
     /// </summary>
     /// <param name="tool">The tool to register.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="tool"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a tool with the same name is already registered.</exception>
     public void RegisterTool(ITool tool)
     {
         if (tool == null)
             throw new ArgumentNullException(nameof(tool));
 
+        if (_tools.ContainsKey(tool.Name))
+            throw new InvalidOperationException($"A tool with the name '{tool.Name}' is already registered.");
+
+        _tools.Add(tool.Name, tool);
+    }
+
+    /// <summary>
+    /// Updates an existing tool registration.
+    /// </summary>
+    /// <param name="tool">The tool to update.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="tool"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a tool with the specified name is not registered.</exception>
+    public void UpdateTool(ITool tool)
+    {
+        if (tool == null)
+            throw new ArgumentNullException(nameof(tool));
+
+        if (!_tools.ContainsKey(tool.Name))
+            throw new InvalidOperationException($"Cannot update tool '{tool.Name}' because it is not registered.");
         _tools[tool.Name] = tool;
     }
 
