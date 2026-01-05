@@ -83,26 +83,27 @@ public class PromptTemplate
     {
         var variables = new List<string>();
         var inVariable = false;
-        var currentVariable = string.Empty;
+        var currentVariable = new System.Text.StringBuilder();
 
         foreach (var c in template)
         {
             if (c == '{')
             {
                 inVariable = true;
-                currentVariable = string.Empty;
+                currentVariable.Clear();
             }
             else if (c == '}' && inVariable)
             {
-                if (!string.IsNullOrWhiteSpace(currentVariable) && !variables.Contains(currentVariable))
+                var varName = currentVariable.ToString();
+                if (!string.IsNullOrWhiteSpace(varName) && !variables.Contains(varName))
                 {
-                    variables.Add(currentVariable);
+                    variables.Add(varName);
                 }
                 inVariable = false;
             }
             else if (inVariable)
             {
-                currentVariable += c;
+                currentVariable.Append(c);
             }
         }
 

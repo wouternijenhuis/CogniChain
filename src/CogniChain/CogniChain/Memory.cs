@@ -29,15 +29,28 @@ public class Message
 /// <summary>
 /// Manages conversation history and context.
 /// </summary>
+/// <remarks>
+/// This class is thread-safe. All public methods use internal locking to ensure safe concurrent access.
+/// </remarks>
 public class ConversationMemory
 {
     private readonly List<Message> _messages = new();
     private readonly int _maxMessages;
+    private readonly object _lock = new();
 
     /// <summary>
     /// Gets the messages in the conversation.
     /// </summary>
-    public IReadOnlyList<Message> Messages => _messages.AsReadOnly();
+    public IReadOnlyList<Message> Messages
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _messages.ToList().AsReadOnly();
+            }
+        }
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConversationMemory"/> class.
@@ -55,26 +68,32 @@ public class ConversationMemory
     /// <param name="content">The content of the message.</param>
     public void AddMessage(string role, string content)
     {
-        var message = new Message
+        lock (_lock)
         {
-            Role = role,
-            Content = content,
-            Timestamp = DateTime.UtcNow
-        };
+            var message = new Message
+            {
+                Role = role,
+                Content = content,
+                Timestamp = DateTime.UtcNow
+            };
 
-        _messages.Add(message);
+            _messages.Add(message);
 
-        // Trim to max messages if needed (keep system messages)
-        // Only trim when we exceed the limit to avoid doing this on every add
-        if (_maxMessages > 0 && ShouldTrim())
-        {
-            TrimMessages();
+            // Trim to max messages if needed (keep system messages)
+            // Only trim when we exceed the limit to avoid doing this on every add
+            if (_maxMessages > 0 && ShouldTrim())
+            {
+                TrimMessages();
+            }
         }
     }
 
     /// <summary>
     /// Determines if the message list should be trimmed.
     /// </summary>
+    /// <remarks>
+    /// This method must be called within a lock on _lock.
+    /// </remarks>
     private bool ShouldTrim()
     {
         // Count non-system messages
@@ -94,6 +113,9 @@ public class ConversationMemory
     /// <summary>
     /// Trims the message list to stay within the maximum message limit while preserving system messages.
     /// </summary>
+    /// <remarks>
+    /// This method must be called within a lock on _lock.
+    /// </remarks>
     private void TrimMessages()
     {
         // Count non-system messages
@@ -151,7 +173,10 @@ public class ConversationMemory
     /// <returns>A formatted string of the conversation history.</returns>
     public string GetFormattedHistory()
     {
-        return string.Join("\n", _messages.Select(m => $"{m.Role}: {m.Content}"));
+        lock (_lock)
+        {
+            return string.Join("\n", _messages.Select(m => $"{m.Role}: {m.Content}"));
+        }
     }
 
     /// <summary>
@@ -159,7 +184,10 @@ public class ConversationMemory
     /// </summary>
     public void Clear()
     {
-        _messages.Clear();
+        lock (_lock)
+        {
+            _messages.Clear();
+        }
     }
 
     /// <summary>
@@ -169,7 +197,10 @@ public class ConversationMemory
     /// <returns>The last N messages.</returns>
     public IEnumerable<Message> GetLastMessages(int count)
     {
-        return _messages.TakeLast(count);
+        lock (_lock)
+        {
+            return _messages.TakeLast(count).ToList();
+        }
     }
 
     /// <summary>
@@ -179,6 +210,9 @@ public class ConversationMemory
     /// <returns>Messages matching the specified role.</returns>
     public IEnumerable<Message> GetMessagesByRole(string role)
     {
-        return _messages.Where(m => m.Role == role);
+        lock (_lock)
+        {
+            return _messages.Where(m => m.Role == role).ToList();
+        }
     }
 }
