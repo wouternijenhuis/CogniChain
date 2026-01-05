@@ -65,20 +65,65 @@ public class ConversationMemory
         _messages.Add(message);
 
         // Trim to max messages if needed (keep system messages)
-        if (_maxMessages > 0)
+        // Only trim when we exceed the limit to avoid doing this on every add
+        if (_maxMessages > 0 && ShouldTrim())
         {
-            var systemMessages = _messages.Where(m => m.Role == "system").ToList();
-            var otherMessages = _messages.Where(m => m.Role != "system").ToList();
+            TrimMessages();
+        }
+    }
 
-            if (otherMessages.Count > _maxMessages)
+    /// <summary>
+    /// Determines if the message list should be trimmed.
+    /// </summary>
+    private bool ShouldTrim()
+    {
+        // Count non-system messages
+        int nonSystemCount = 0;
+        for (int i = 0; i < _messages.Count; i++)
+        {
+            if (_messages[i].Role != "system")
             {
-                var toRemove = otherMessages.Count - _maxMessages;
-                otherMessages.RemoveRange(0, toRemove);
+                nonSystemCount++;
             }
+        }
 
-            _messages.Clear();
-            _messages.AddRange(systemMessages);
-            _messages.AddRange(otherMessages);
+        // Trim when we have more than maxMessages non-system messages
+        return nonSystemCount > _maxMessages;
+    }
+
+    /// <summary>
+    /// Trims the message list to stay within the maximum message limit while preserving system messages.
+    /// </summary>
+    private void TrimMessages()
+    {
+        // Count non-system messages
+        int nonSystemCount = 0;
+        for (int i = 0; i < _messages.Count; i++)
+        {
+            if (_messages[i].Role != "system")
+            {
+                nonSystemCount++;
+            }
+        }
+
+        // If we're within limits, no need to trim
+        if (nonSystemCount <= _maxMessages)
+        {
+            return;
+        }
+
+        // Remove oldest non-system messages
+        int toRemove = nonSystemCount - _maxMessages;
+        int removed = 0;
+        
+        for (int i = 0; i < _messages.Count && removed < toRemove; i++)
+        {
+            if (_messages[i].Role != "system")
+            {
+                _messages.RemoveAt(i);
+                i--; // Adjust index after removal
+                removed++;
+            }
         }
     }
 
