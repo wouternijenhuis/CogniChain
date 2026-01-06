@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="CogniChain fun copilot icon" fill="none">
+  <path d="M56 112c0-39.8 32.2-72 72-72h0c39.8 0 72 32.2 72 72v32c0 35.3-28.7 64-64 64H120c-35.3 0-64-28.7-64-64v-32Z" stroke="currentColor" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M76 104c0-18.8 15.2-34 34-34h36c18.8 0 34 15.2 34 34" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M64 132c0-10.5 8.5-19 19-19h90c10.5 0 19 8.5 19 19v24c0 28.7-23.3 52-52 52h-24c-28.7 0-52-23.3-52-52v-24Z" stroke="currentColor" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M104 148c0-7.7 6.3-14 14-14h4c7.7 0 14 6.3 14 14v4c0 7.7-6.3 14-14 14h-4c-7.7 0-14-6.3-14-14v-4Z" stroke="currentColor" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M152 148c0-7.7 6.3-14 14-14h4c7.7 0 14 6.3 14 14v4c0 7.7-6.3 14-14 14h-4c-7.7 0-14-6.3-14-14v-4Z" stroke="currentColor" stroke-width="12" stroke-linejoin="round"/>
+  <circle cx="120" cy="150" r="3.5" fill="currentColor"/>
+  <circle cx="172" cy="150" r="3.5" fill="currentColor"/>
+  <path d="M112 178c6 10 26 14 36 0" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M78 86l-16-10" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M178 86l16-10" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M86 60c6-10 18-16 30-16" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.6"/>
+  <path d="M170 60c-6-10-18-16-30-16" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.6"/>
+  <path d="M90 228c0-14.4 11.6-26 26-26h6c14.4 0 26 11.6 26 26" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M146 228c0-14.4 11.6-26 26-26h6c14.4 0 26 11.6 26 26" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <path d="M52 118c0 10 8 18 18 18" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+  <path d="M204 118c0 10-8 18-18 18" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+  <path d="M56 98c10-10 22-16 36-18" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.45"/>
+  <path d="M200 98c-10-10-22-16-36-18" stroke="currentColor" stroke-width="12" stroke-linecap="round" opacity="0.45"/>
+</svg>
