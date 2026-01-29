@@ -2,14 +2,9 @@ namespace CogniChain.Tests;
 
 public class ChainTests
 {
-    private class SimpleChainStep : IChainStep
+    private class SimpleChainStep(Func<string, string> transform) : IChainStep
     {
-        private readonly Func<string, string> _transform;
-
-        public SimpleChainStep(Func<string, string> transform)
-        {
-            _transform = transform;
-        }
+        private readonly Func<string, string> _transform = transform;
 
         public Task<ChainResult> ExecuteAsync(string input, CancellationToken cancellationToken = default)
         {

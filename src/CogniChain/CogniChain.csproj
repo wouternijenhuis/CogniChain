@@ -1,0 +1,79 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Build settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+
+    <!-- Package identity -->
+    <PackageId>CogniChain</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Wouter Nijenhuis</Authors>
+    <Company>Wouter Nijenhuis</Company>
+    <Copyright>Copyright (c) Wouter Nijenhuis 2026</Copyright>
+
+    <!-- Package description -->
+    <Title>CogniChain</Title>
+    <Description>A .NET library for orchestrating LLM workflows with prompt templates, chains, tools, memory, retries, and streaming support. Build reliable AI-powered applications with conversation memory, tool calling, resilient workflows, and real-time streaming.</Description>
+    <Summary>Modern .NET library for building LLM-powered applications with workflow orchestration, prompt management, and tool integration.</Summary>
+
+    <!-- Package discoverability -->
+    <PackageTags>LLM;AI;OpenAI;ChatGPT;Chains;Prompts;Agent;Orchestration;dotnet;csharp;machine-learning;artificial-intelligence;nlp;chatbot;workflow;automation</PackageTags>
+
+    <!-- Package licensing -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Package links -->
+    <PackageProjectUrl>https://github.com/wouternijenhuis/CogniChain</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/wouternijenhuis/CogniChain</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Package assets -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+
+    <!-- Package release notes - link to changelog -->
+    <PackageReleaseNotes>See https://github.com/wouternijenhuis/CogniChain/blob/main/CHANGELOG.md for release notes.</PackageReleaseNotes>
+
+    <!-- Source Link and deterministic builds for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Enable code analysis -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+  </PropertyGroup>
+
+  <!-- Source Link for better debugging experience -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="All"/>
+  </ItemGroup>
+
+  <!-- SVG to PNG conversion for package icon -->
+  <PropertyGroup>
+    <SvgIconSource>$(MSBuildThisFileDirectory)../../../icon.svg</SvgIconSource>
+    <PngIconOutput>$(MSBuildThisFileDirectory)../../../icon.png</PngIconOutput>
+  </PropertyGroup>
+
+  <Target Name="ConvertSvgToPng" BeforeTargets="_GetPackageFiles;GenerateNuspec" Condition="Exists('$(SvgIconSource)')">
+    <Message Importance="high" Text="Converting SVG icon to PNG for NuGet package..."/>
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildThisFileDirectory)../../.." IgnoreExitCode="true" StandardOutputImportance="low"/>
+    <Exec Command="dotnet Svg.Skia.Converter -f &quot;$(SvgIconSource)&quot; --outputFiles &quot;$(PngIconOutput)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)../../.." StandardOutputImportance="low"/>
+    <ItemGroup>
+      <None Include="$(PngIconOutput)" Pack="true" PackagePath="/"/>
+    </ItemGroup>
+  </Target>
+
+  <!-- Package assets -->
+  <ItemGroup>
+    <None Include="../../../README.md" Pack="true" PackagePath="/"/>
+  </ItemGroup>
+
+</Project>

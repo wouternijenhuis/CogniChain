@@ -1,0 +1,22 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/CogniChain/">
+    <Project Path="src/CogniChain/CogniChain.csproj" />
+  </Folder>
+  <Folder Name="/tests/CogniChain.Tests/">
+    <Project Path="tests/CogniChain.Tests/CogniChain.Tests/CogniChain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/examples/CogniChain.Examples.OpenAI/">
+    <Project Path="examples/CogniChain.Examples.OpenAI/CogniChain.Examples.OpenAI.csproj" />
+  </Folder>
+  <Folder Name="/examples/CogniChain.Examples.Azure/">
+    <Project Path="examples/CogniChain.Examples.Azure/CogniChain.Examples.Azure.csproj" />
+  </Folder>
+  <Folder Name="/examples/CogniChain.Examples.SemanticKernel/">
+    <Project Path="examples/CogniChain.Examples.SemanticKernel/CogniChain.Examples.SemanticKernel.csproj" />
+  </Folder>
+</Solution>

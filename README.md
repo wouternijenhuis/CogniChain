@@ -52,9 +52,9 @@ orchestrator.Memory.AddSystemMessage("You are a helpful coding assistant.");
 // 3. Create a workflow with prompt template
 var workflow = orchestrator.CreateWorkflow()
     .WithPrompt(new PromptTemplate("Help me with: {task}"))
-    .WithVariables(new Dictionary<string, string> 
-    { 
-        ["task"] = "writing a C# async method" 
+    .WithVariables(new Dictionary<string, string>
+    {
+        ["task"] = "writing a C# async method"
     })
     .AddStep(new YourLLMCallStep()); // Your LLM API integration here
 
@@ -111,9 +111,9 @@ public class WeatherTool : ToolBase
     public override string Name => "get_weather";
     public override string Description => "Get current weather for a city";
     
-    public override async Task<string> ExecuteAsync(string city, CancellationToken ct)
+    public override async Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
     {
-        var weather = await WeatherApi.GetWeatherAsync(city);
+        var weather = await WeatherApi.GetWeatherAsync(input);
         return $"Temperature: {weather.Temp}°C, Conditions: {weather.Conditions}";
     }
 }
@@ -286,7 +286,7 @@ var orchestrator = new LLMOrchestrator();
 
 var workflow = orchestrator.CreateWorkflow()
     .WithPrompt(new PromptTemplate("Explain {concept} in simple terms"))
-    .WithVariables(new { concept = "dependency injection" })
+    .WithVariables(new Dictionary<string, string> { ["concept"] = "dependency injection" })
     .AddStep(new OpenAIStep(client));
 
 var result = await workflow.ExecuteAsync();
