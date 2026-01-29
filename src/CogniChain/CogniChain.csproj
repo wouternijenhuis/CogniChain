@@ -58,14 +58,14 @@
 
   <!-- SVG to PNG conversion for package icon -->
   <PropertyGroup>
-    <SvgIconSource>$(MSBuildThisFileDirectory)../../../icon.svg</SvgIconSource>
-    <PngIconOutput>$(MSBuildThisFileDirectory)../../../icon.png</PngIconOutput>
+    <SvgIconSource>$(MSBuildThisFileDirectory)../../icon.svg</SvgIconSource>
+    <PngIconOutput>$(MSBuildThisFileDirectory)../../icon.png</PngIconOutput>
   </PropertyGroup>
 
   <Target Name="ConvertSvgToPng" BeforeTargets="_GetPackageFiles;GenerateNuspec" Condition="Exists('$(SvgIconSource)')">
     <Message Importance="high" Text="Converting SVG icon to PNG for NuGet package..."/>
-    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildThisFileDirectory)../../.." IgnoreExitCode="true" StandardOutputImportance="low"/>
-    <Exec Command="dotnet Svg.Skia.Converter -f &quot;$(SvgIconSource)&quot; --outputFiles &quot;$(PngIconOutput)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)../../.." StandardOutputImportance="low"/>
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildThisFileDirectory)../.." IgnoreExitCode="true" StandardOutputImportance="low"/>
+    <Exec Command="dotnet Svg.Skia.Converter -f &quot;$(SvgIconSource)&quot; --outputFiles &quot;$(PngIconOutput)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)../.." StandardOutputImportance="low"/>
     <ItemGroup>
       <None Include="$(PngIconOutput)" Pack="true" PackagePath="/"/>
     </ItemGroup>
@@ -73,7 +73,7 @@
 
   <!-- Package assets -->
   <ItemGroup>
-    <None Include="../../../README.md" Pack="true" PackagePath="/"/>
+    <None Include="../../README.md" Pack="true" PackagePath="/"/>
   </ItemGroup>
 
 </Project>
