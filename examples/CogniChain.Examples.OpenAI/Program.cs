@@ -17,10 +17,9 @@ var examples = new IExample[]
     new BasicChainStepExample(chatClient),
     new MultiTurnConversationExample(chatClient),
     new MultiStepChainExample(chatClient),
-    new StreamingExample(chatClient),
-    new ToolIntegrationExample(),
-    new StructuredOutputExample(chatClient),
-    new TemperatureControlExample(chatClient)
+    new RetryHandlerExample(chatClient),
+    new StreamingHandlerExample(chatClient),
+    new ToolIntegrationExample()
 };
 
 // Run all examples

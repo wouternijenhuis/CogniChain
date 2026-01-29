@@ -18,11 +18,9 @@ var examples = new IExample[]
     new CombinedPromptTemplateExample(kernel),
     new MultiTurnConversationExample(kernel),
     new ChainPipelineExample(kernel),
-    new StreamingExample(kernel),
-    new ToolIntegrationExample(kernel),
     new RetryHandlerExample(kernel),
-    new PromptExecutionSettingsExample(kernel),
-    new NativePluginExample(kernel)
+    new StreamingHandlerExample(kernel),
+    new ToolIntegrationExample(kernel)
 };
 
 // Run all examples
