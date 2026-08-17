@@ -7,10 +7,16 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+# Cost guard: a newer run supersedes an older one on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     
@@ -41,6 +47,7 @@ jobs:
   package:
     name: Create NuGet Package
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
