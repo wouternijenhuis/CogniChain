@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 1.x | ✅ |
-| 0.x | ❌ (pre-1.0; upgrade — see [migration guide](docs/migration-v1.md)) |
+| 0.3.x | ✅ |
+| < 0.3.0 | ❌ (upgrade — see [migration guide](docs/migration.md)) |
 
 ## Reporting a vulnerability
 

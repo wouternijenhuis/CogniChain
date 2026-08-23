@@ -20,7 +20,7 @@ public static class ChainActivitySource
     private static string GetVersion() =>
         typeof(ChainActivitySource).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(ChainActivitySource).Assembly.GetName().Version?.ToString()
-        ?? "1.0.0";
+        ?? "0.3.0";
 
     /// <summary>Starts an activity for one chain step, or <see langword="null"/> if nothing is listening.</summary>
     public static Activity? StartStep(string chainName, string stepName, int stepIndex)

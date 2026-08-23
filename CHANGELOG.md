@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-08-23
+## [0.3.0] - 2026-08-23
 
 A full rebuild on [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)'s
-`IChatClient`. Breaking change — see [`docs/migration-v1.md`](docs/migration-v1.md). The 0.x API's
+`IChatClient`. Breaking change — see [`docs/migration.md`](docs/migration.md). The 0.2.x API's
 headline features (conversation memory, tool calling, real streaming) never fully worked end to end;
-1.0 delegates all of that to the platform instead of reimplementing it.
+0.3.0 delegates all of that to the platform instead of reimplementing it.
 
 ### Added
 
@@ -154,8 +154,8 @@ headline features (conversation memory, tool calling, real streaming) never full
 
 ---
 
-[Unreleased]: https://github.com/wouternijenhuis/CogniChain/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.2.1...v1.0.0
+[Unreleased]: https://github.com/wouternijenhuis/CogniChain/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/wouternijenhuis/CogniChain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wouternijenhuis/CogniChain/releases/tag/v0.1.0

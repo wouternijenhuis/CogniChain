@@ -101,7 +101,7 @@ CogniChain doesn't compete with `Microsoft.Extensions.AI` or the Microsoft Agent
 - **Microsoft Agent Framework** (`Microsoft.Agents.AI`) is the successor to Semantic Kernel's and AutoGen's agent abstractions, for multi-agent orchestration. `CogniChain.Agents` bridges the two: `chain.AsAIAgent()` and `agent.AsChainStep()`.
 - **Semantic Kernel** is in maintenance mode. If you're on it today, CogniChain slots in the same place Agent Framework does — as a typed layer above `IChatClient` — and doesn't require migrating off SK first.
 
-Upgrading from CogniChain 0.x? See [`docs/migration-v1.md`](docs/migration-v1.md).
+Upgrading from CogniChain 0.x? See [`docs/migration.md`](docs/migration.md).
 
 ## Documentation
 
@@ -109,7 +109,7 @@ Upgrading from CogniChain 0.x? See [`docs/migration-v1.md`](docs/migration-v1.md
 - 📗 [API Reference](docs/api-reference.md)
 - 📙 [Best Practices](docs/best-practices.md)
 - 🏗️ [Architecture](docs/architecture.md)
-- 🔀 [Migration from 0.x](docs/migration-v1.md)
+- 🔀 [Migration from 0.x](docs/migration.md)
 - 💡 [Examples](examples/) — [OpenAI](examples/CogniChain.Examples.OpenAI), [Azure OpenAI](examples/CogniChain.Examples.Azure), [Agent Framework](examples/CogniChain.Examples.AgentFramework)
 
 ## Community & support
