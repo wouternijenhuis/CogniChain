@@ -1,18 +1,11 @@
-using CogniChain;
+using System.ComponentModel;
 
 namespace CogniChain.Examples.Azure.Tools;
 
-/// <summary>
-/// Tool for estimating Azure resource costs.
-/// </summary>
-public class CostEstimatorTool : ToolBase
+/// <summary>A simulated Azure cost estimator.</summary>
+public sealed class CostEstimatorTool
 {
-    public override string Name => "cost_estimator";
-    public override string Description => "Estimate monthly costs for Azure resources";
-
-    public override Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
-    {
-        // Simulated cost estimation - replace with actual Azure Cost Management API
-        return Task.FromResult($"Estimated monthly cost for {input}: $125.00/month (simulated)");
-    }
+    [Description("Estimates the simulated monthly cost, in USD, of an Azure SKU.")]
+    public decimal EstimateMonthlyCost([Description("The SKU name, e.g. 'Standard_B2s'.")] string sku) =>
+        sku.Contains("B2s", StringComparison.OrdinalIgnoreCase) ? 30.5m : 120.0m;
 }

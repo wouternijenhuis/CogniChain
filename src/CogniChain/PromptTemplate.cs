@@ -1,113 +1,178 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Text;
+using Microsoft.Extensions.AI;
+
 namespace CogniChain;
 
 /// <summary>
-/// Represents a prompt template with variable substitution capabilities.
+/// A reusable prompt template with <c>{variable}</c> placeholders and <c>{{</c>/<c>}}</c> escaping
+/// for literal braces (so JSON-bearing prompts render correctly).
 /// </summary>
 /// <remarks>
-/// Initializes a new instance of the <see cref="PromptTemplate"/> class.
+/// The template is parsed once, at construction, into an immutable list of literal and placeholder
+/// segments. Rendering walks the segments and substitutes each placeholder exactly once — unlike a
+/// sequence of <see cref="string.Replace(string, string?)"/> calls, a substituted value is never
+/// re-scanned for further placeholders.
 /// </remarks>
-/// <param name="template">The template string with variables in {variableName} format.</param>
-public class PromptTemplate(string template)
+public sealed class PromptTemplate
 {
-    private readonly string _template = template ?? throw new ArgumentNullException(nameof(template));
-    private readonly List<string> _variables = ExtractVariables(template);
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> PropertyCache = new();
 
-    /// <summary>
-    /// Gets the raw template string.
-    /// </summary>
-    public string Template => _template;
+    private readonly IReadOnlyList<Segment> _segments;
 
-    /// <summary>
-    /// Gets the list of variable names used in the template.
-    /// </summary>
-    public IReadOnlyList<string> Variables => _variables.AsReadOnly();
+    /// <summary>Gets the original template text.</summary>
+    public string Template { get; }
 
-    /// <summary>
-    /// Formats the template with the provided variable values.
-    /// </summary>
-    /// <param name="variables">Dictionary of variable names and their values.</param>
-    /// <returns>The formatted prompt string.</returns>
-    public string Format(Dictionary<string, string> variables)
+    /// <summary>Gets the distinct placeholder names, in order of first appearance.</summary>
+    public IReadOnlyList<string> Variables { get; }
+
+    /// <summary>Initializes a new instance of the <see cref="PromptTemplate"/> class.</summary>
+    /// <param name="template">The template text, e.g. <c>"Translate '{text}' to {language}"</c>.</param>
+    public PromptTemplate(string template)
     {
-        if (variables == null)
-            throw new ArgumentNullException(nameof(variables));
+        ArgumentNullException.ThrowIfNull(template);
+        Template = template;
+        _segments = Parse(template);
+        Variables = _segments.Where(s => s.IsPlaceholder).Select(s => s.Text).Distinct().ToArray();
+    }
 
-        var result = _template;
-        foreach (var variable in _variables)
+    /// <summary>Creates a <see cref="PromptTemplate"/> from a string. Equivalent to the constructor.</summary>
+    public static PromptTemplate FromString(string template) => new(template);
+
+    /// <summary>Renders the template, substituting each placeholder with the matching value.</summary>
+    /// <exception cref="FormatException">A placeholder has no corresponding value.</exception>
+    public string Render(IReadOnlyDictionary<string, string?> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        var builder = new StringBuilder();
+        foreach (var segment in _segments)
         {
-            if (!variables.TryGetValue(variable, out var value))
-                throw new ArgumentException($"Missing value for variable: {variable}");
+            if (!segment.IsPlaceholder)
+            {
+                builder.Append(segment.Text);
+                continue;
+            }
 
-            result = result.Replace($"{{{variable}}}", value);
+            if (!values.TryGetValue(segment.Text, out var value) || value is null)
+            {
+                throw new FormatException($"Missing value for placeholder '{{{segment.Text}}}' in prompt template.");
+            }
+
+            builder.Append(value);
         }
 
-        return result;
+        return builder.ToString();
     }
 
     /// <summary>
-    /// Formats the template with the provided variable values.
+    /// Renders the template, reading placeholder values from the public readable properties of
+    /// <paramref name="values"/> (an anonymous object, record, or POCO). Property accessors are
+    /// cached per type.
     /// </summary>
-    /// <param name="variables">Object with properties matching variable names.</param>
-    /// <returns>The formatted prompt string.</returns>
-    /// <remarks>
-    /// Property values are converted to strings using ToString(). For complex objects,
-    /// this may produce unexpected results (e.g., "Namespace.TypeName" instead of meaningful content).
-    /// For complex objects, consider using Format(Dictionary&lt;string, string&gt;) and provide
-    /// custom string formatting, or ensure your objects override ToString() appropriately.
-    /// Only public readable properties are used.
-    /// </remarks>
-    public string Format(object variables)
+    [RequiresUnreferencedCode("Reflects over the public properties of an arbitrary object; ensure they're preserved when trimming, or use Render(IReadOnlyDictionary<string, string?>) instead.")]
+    public string Render(object values)
     {
-        if (variables == null)
-            throw new ArgumentNullException(nameof(variables));
+        ArgumentNullException.ThrowIfNull(values);
 
-        var dict = new Dictionary<string, string>();
-        var properties = variables.GetType().GetProperties();
+        var properties = PropertyCache.GetOrAdd(values.GetType(), static t =>
+            t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanRead && p.GetIndexParameters().Length == 0).ToArray());
 
-        foreach (var prop in properties)
+        var dictionary = new Dictionary<string, string?>(properties.Length, StringComparer.Ordinal);
+        foreach (var property in properties)
         {
-            var value = prop.GetValue(variables)?.ToString() ?? string.Empty;
-            dict[prop.Name] = value;
+            dictionary[property.Name] = property.GetValue(values)?.ToString();
         }
 
-        return Format(dict);
+        return Render(dictionary);
     }
 
-    private static List<string> ExtractVariables(string template)
-    {
-        var variables = new List<string>();
-        var inVariable = false;
-        var currentVariable = new System.Text.StringBuilder();
+    /// <summary>Renders the template and wraps the result in a <see cref="ChatMessage"/>.</summary>
+    public ChatMessage RenderMessage(ChatRole role, object values) => new(role, Render(values));
 
-        foreach (var c in template)
+    /// <summary>Renders the template and wraps the result in a <see cref="ChatMessage"/>.</summary>
+    public ChatMessage RenderMessage(ChatRole role, IReadOnlyDictionary<string, string?> values) => new(role, Render(values));
+
+    /// <inheritdoc />
+    public override string ToString() => Template;
+
+    private static IReadOnlyList<Segment> Parse(string template)
+    {
+        var segments = new List<Segment>();
+        var literal = new StringBuilder();
+        var i = 0;
+
+        while (i < template.Length)
         {
+            var c = template[i];
+
             if (c == '{')
             {
-                inVariable = true;
-                currentVariable.Clear();
-            }
-            else if (c == '}' && inVariable)
-            {
-                var varName = currentVariable.ToString();
-                if (!string.IsNullOrWhiteSpace(varName) && !variables.Contains(varName))
+                if (i + 1 < template.Length && template[i + 1] == '{')
                 {
-                    variables.Add(varName);
+                    literal.Append('{');
+                    i += 2;
+                    continue;
                 }
-                inVariable = false;
+
+                var close = template.IndexOf('}', i + 1);
+                if (close < 0)
+                {
+                    throw new FormatException($"Unmatched '{{' at position {i} in prompt template.");
+                }
+
+                if (literal.Length > 0)
+                {
+                    segments.Add(Segment.Literal(literal.ToString()));
+                    literal.Clear();
+                }
+
+                var name = template[(i + 1)..close].Trim();
+                if (name.Length == 0)
+                {
+                    throw new FormatException($"Empty placeholder '{{}}' at position {i} in prompt template.");
+                }
+
+                segments.Add(Segment.Placeholder(name));
+                i = close + 1;
+                continue;
             }
-            else if (inVariable)
+
+            if (c == '}' && i + 1 < template.Length && template[i + 1] == '}')
             {
-                currentVariable.Append(c);
+                literal.Append('}');
+                i += 2;
+                continue;
             }
+
+            literal.Append(c);
+            i++;
         }
 
-        return variables;
+        if (literal.Length > 0)
+        {
+            segments.Add(Segment.Literal(literal.ToString()));
+        }
+
+        return segments;
     }
 
-    /// <summary>
-    /// Creates a new prompt template from a string.
-    /// </summary>
-    /// <param name="template">The template string.</param>
-    /// <returns>A new <see cref="PromptTemplate"/> instance.</returns>
-    public static PromptTemplate FromString(string template) => new(template);
+    private readonly struct Segment
+    {
+        public bool IsPlaceholder { get; }
+
+        public string Text { get; }
+
+        private Segment(bool isPlaceholder, string text)
+        {
+            IsPlaceholder = isPlaceholder;
+            Text = text;
+        }
+
+        public static Segment Literal(string text) => new(false, text);
+
+        public static Segment Placeholder(string name) => new(true, name);
+    }
 }

@@ -7,8 +7,14 @@
   <Folder Name="/src/CogniChain/">
     <Project Path="src/CogniChain/CogniChain.csproj" />
   </Folder>
+  <Folder Name="/src/CogniChain.Agents/">
+    <Project Path="src/CogniChain.Agents/CogniChain.Agents.csproj" />
+  </Folder>
   <Folder Name="/tests/CogniChain.Tests/">
-    <Project Path="tests/CogniChain.Tests/CogniChain.Tests/CogniChain.Tests.csproj" />
+    <Project Path="tests/CogniChain.Tests/CogniChain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/examples/CogniChain.Examples.Shared/">
+    <Project Path="examples/CogniChain.Examples.Shared/CogniChain.Examples.Shared.csproj" />
   </Folder>
   <Folder Name="/examples/CogniChain.Examples.OpenAI/">
     <Project Path="examples/CogniChain.Examples.OpenAI/CogniChain.Examples.OpenAI.csproj" />
@@ -16,7 +22,7 @@
   <Folder Name="/examples/CogniChain.Examples.Azure/">
     <Project Path="examples/CogniChain.Examples.Azure/CogniChain.Examples.Azure.csproj" />
   </Folder>
-  <Folder Name="/examples/CogniChain.Examples.SemanticKernel/">
-    <Project Path="examples/CogniChain.Examples.SemanticKernel/CogniChain.Examples.SemanticKernel.csproj" />
+  <Folder Name="/examples/CogniChain.Examples.AgentFramework/">
+    <Project Path="examples/CogniChain.Examples.AgentFramework/CogniChain.Examples.AgentFramework.csproj" />
   </Folder>
 </Solution>

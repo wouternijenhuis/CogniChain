@@ -1,25 +1,38 @@
-using CogniChain.Examples.Azure.Steps;
-using OpenAI.Chat;
+using CogniChain.Examples.Shared;
+using Microsoft.Extensions.AI;
 
 namespace CogniChain.Examples.Azure.Examples;
 
 /// <summary>
-/// Demonstrates content generation using chained steps.
+/// Composes a typed <c>Prompt&lt;T&gt;</c> step with a <c>Then</c> step: the outline's structured
+/// output becomes the input to a second model call that writes the full article.
 /// </summary>
-public class ContentPipelineExample(ChatClient chatClient) : IExample
+public sealed class ContentPipelineExample(IChatClient chatClient) : IExample
 {
-    private readonly ChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-
     public string Name => "Content Pipeline";
-    public string Description => "Shows how to chain multiple AI steps for content generation";
+
+    public string Description => "Prompt<T> produces a typed outline; Then expands it into an article with a second model call.";
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        var chain = Chain.Create()
-            .AddStep(new AzureOpenAIStep(_chatClient, "Generate a brief outline for a blog post about:"))
-            .AddStep(new AzureOpenAIStep(_chatClient, "Expand this outline into a short introduction paragraph:"));
+        var chain = Chain.Create(chatClient)
+            .Prompt<Outline>("Create a 3-section outline for a short article about {topic}.")
+            .Then<Article>(async (outline, context, ct) =>
+            {
+                var sections = string.Join("\n- ", outline.Sections);
+                var response = await context.ChatClient.GetResponseAsync(
+                    $"Write a short article (under 150 words) covering these sections:\n- {sections}", context.Options, ct);
+                return new Article(outline.Sections[0], response.Text);
+            })
+            .Build();
 
-        var result = await chain.RunAsync("Best practices for securing Azure resources");
-        Console.WriteLine($"Generated content:\n{result.Output}");
+        var result = await chain.RunAsync(new { topic = "cost optimization on Azure" }, cancellationToken);
+
+        Console.WriteLine($"# {result.Value.Title}");
+        Console.WriteLine(result.Value.Body);
     }
+
+    private sealed record Outline(IReadOnlyList<string> Sections);
+
+    private sealed record Article(string Title, string Body);
 }

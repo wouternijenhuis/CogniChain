@@ -1,18 +1,13 @@
-using CogniChain;
+using System.ComponentModel;
 
 namespace CogniChain.Examples.OpenAI.Tools;
 
-/// <summary>
-/// Tool for performing calculations.
-/// </summary>
-public class CalculatorTool : ToolBase
+/// <summary>A tiny calculator, wired up via <c>WithToolsFrom(new CalculatorTool())</c>.</summary>
+public sealed class CalculatorTool
 {
-    public override string Name => "calculator";
-    public override string Description => "Perform basic arithmetic calculations";
+    [Description("Adds two numbers together.")]
+    public double Add([Description("The first number.")] double a, [Description("The second number.")] double b) => a + b;
 
-    public override Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
-    {
-        // Simple calculator simulation - replace with actual expression parser
-        return Task.FromResult($"Result: {input} = 42 (simulated)");
-    }
+    [Description("Multiplies two numbers together.")]
+    public double Multiply([Description("The first number.")] double a, [Description("The second number.")] double b) => a * b;
 }

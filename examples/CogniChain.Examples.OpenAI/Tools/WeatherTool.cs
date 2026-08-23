@@ -1,19 +1,11 @@
-using CogniChain;
+using System.ComponentModel;
 
 namespace CogniChain.Examples.OpenAI.Tools;
 
-/// <summary>
-/// Tool for getting weather information.
-/// </summary>
-public class WeatherTool : ToolBase
+/// <summary>A simulated weather lookup, wired up via <c>WithToolsFrom(new WeatherTool())</c>.</summary>
+public sealed class WeatherTool
 {
-    public override string Name => "get_weather";
-    public override string Description => "Get current weather for a city";
-
-    public override Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
-    {
-        // Simulated weather API response - replace with actual weather API
-        var result = $"Weather in {input}: 72°F, Partly Cloudy";
-        return Task.FromResult(result);
-    }
+    [Description("Gets the current simulated weather for a city.")]
+    public string GetWeather([Description("The city to look up, e.g. 'Seattle'.")] string city) =>
+        $"The weather in {city} is 18°C and partly cloudy. (simulated)";
 }

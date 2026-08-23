@@ -1,29 +1,32 @@
+using Azure.AI.OpenAI;
+using Azure.Identity;
 using CogniChain.Examples.Azure.Configuration;
 using CogniChain.Examples.Azure.Examples;
-using CogniChain.Examples.Azure.Services;
+using CogniChain.Examples.Shared;
+using CogniChain.Middleware;
+using Microsoft.Extensions.AI;
 
-// Load configuration
 var settings = AzureOpenAISettings.FromEnvironment();
 
-// Create services
-var clientFactory = new AzureChatClientFactory(settings);
-var chatClient = clientFactory.CreateChatClient();
+AzureOpenAIClient azureClient = settings.UseAzureIdentity
+    ? new AzureOpenAIClient(settings.Endpoint, new DefaultAzureCredential())
+    : new AzureOpenAIClient(settings.Endpoint, new Azure.AzureKeyCredential(settings.ApiKey!));
 
-Console.WriteLine($"Using {clientFactory.AuthenticationMethod} authentication");
-Console.WriteLine($"Endpoint: {settings.Endpoint}");
-Console.WriteLine($"Deployment: {settings.DeploymentName}\n");
+IChatClient chatClient = azureClient
+    .GetChatClient(settings.Deployment)
+    .AsIChatClient()
+    .AsBuilder()
+    .UseFunctionInvocation()
+    .UseCogniChainRetry()
+    .Build();
 
-// Create examples - each focused on a single responsibility
-var examples = new IExample[]
-{
-    new BasicChainStepExample(chatClient),
-    new MultiTurnConversationExample(chatClient),
+IExample[] examples =
+[
+    new BasicPromptExample(chatClient),
     new ContentPipelineExample(chatClient),
-    new RetryHandlerExample(chatClient),
-    new StreamingHandlerExample(chatClient),
-    new ToolIntegrationExample()
-};
+    new MultiTurnConversationExample(chatClient),
+    new ToolCallingExample(chatClient),
+    new StreamingExample(chatClient),
+];
 
-// Run all examples
-var runner = new ExampleRunner(examples);
-await runner.RunAllAsync();
+await ExampleRunner.RunAllAsync(examples);

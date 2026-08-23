@@ -1,452 +1,127 @@
 # CogniChain
 
-> A modern .NET 10 library for building LLM-powered applications with built-in support for prompt management, conversation memory, tool calling, and resilient workflows.
+[![CI](https://github.com/wouternijenhuis/CogniChain/actions/workflows/ci.yml/badge.svg)](https://github.com/wouternijenhuis/CogniChain/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/CogniChain.svg)](https://www.nuget.org/packages/CogniChain)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![DevDad.net](https://img.shields.io/badge/DevDad.net-toolbox-6b5b95)](https://devdad.net)
+
+> Part of the **[DevDad.net](https://devdad.net)** toolbox — *professional engineering, shaped by real life.*
+
+A typed, composable chain layer for [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)'s `IChatClient`. CogniChain sits in the gap between a raw one-shot chat call and a full [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/overview/) workflow: type-safe steps, structured output, tool calling, resilient middleware, and real token streaming — all delegated to the platform, none of it reinvented.
 
 ## Why CogniChain?
 
-Building reliable LLM applications requires more than just API calls. CogniChain provides the building blocks you need:
-
-- **🎯 Prompt Management**: Reusable templates with type-safe variable substitution
-- **⛓️ Workflow Orchestration**: Chain multiple operations with automatic error handling
-- **🛠️ Tool Integration**: Let your LLM call functions and APIs in your application
-- **💾 Context Management**: Automatic conversation history with smart memory limits
-- **🔄 Resilience**: Built-in retry logic with exponential backoff for API failures
-- **📡 Streaming**: Real-time response streaming for better user experience
-- **🎨 Developer Experience**: Fluent API with full IntelliSense support
-
-Perfect for building chatbots, AI assistants, content generation pipelines, and intelligent automation workflows.
+- **🎯 Typed steps** — `.Prompt<T>()` composes with `.Then<T>()`, `.Map()`, and `.Branch()`; the compiler checks that adjacent steps line up.
+- **📦 Structured output** — `.Prompt<T>()` deserializes the model's response straight into your type via JSON schema.
+- **🛠️ Real tool calling** — `.WithTools()` / `.WithToolsFrom()` hand `AIFunction`s to the model; it decides whether to call them.
+- **💾 Working conversation history** — reuse a `ChainContext` across calls and the system message and prior turns actually reach the model.
+- **🔄 Resilient by default** — `RetryingChatClient` classifies transient failures correctly, honors `Retry-After`, and never retries cancellation.
+- **📡 Real streaming** — `RunStreamingAsync` yields tokens as they arrive, not once per step.
+- **🤖 Agent Framework bridge** — the optional `CogniChain.Agents` package turns a chain into an `AIAgent`, or drops an `AIAgent` into a chain.
 
 ## Installation
 
-Install CogniChain via NuGet:
-
 ```bash
 dotnet add package CogniChain
+dotnet add package CogniChain.Agents   # optional: Microsoft Agent Framework bridge
 ```
 
-**Requirements:**
-- .NET 10.0 or later
-- Any LLM API client (OpenAI, Azure OpenAI, Anthropic, etc.)
+**Requirements:** .NET 10.0+, and any `IChatClient` — OpenAI, Azure OpenAI, or anything else `Microsoft.Extensions.AI` supports.
 
-> **Note**: CogniChain doesn't include LLM API clients. Bring your own client and wrap it in chain steps or tools.
-
-## Quick Start
-
-### Your First LLM Workflow in 5 Minutes
-
-Here's a complete example of building a simple AI assistant:
+## Quick start
 
 ```csharp
 using CogniChain;
+using Microsoft.Extensions.AI;
+using OpenAI;
 
-// 1. Set up the orchestrator
-var orchestrator = new LLMOrchestrator(new OrchestratorConfig
-{
-    MaxConversationHistory = 10,
-    RetryPolicy = new RetryPolicy { MaxRetries = 3 }
-});
+IChatClient chatClient = new OpenAIClient(apiKey)
+    .GetChatClient("gpt-5-mini")
+    .AsIChatClient()
+    .AsBuilder()
+    .UseFunctionInvocation()
+    .Build();
 
-// 2. Add system context
-orchestrator.Memory.AddSystemMessage("You are a helpful coding assistant.");
+var chain = Chain.Create(chatClient)
+    .WithSystemMessage("You are a helpful coding assistant.")
+    .Prompt("Explain {concept} in one sentence for a C# developer.")
+    .Build();
 
-// 3. Create a workflow with prompt template
-var workflow = orchestrator.CreateWorkflow()
-    .WithPrompt(new PromptTemplate("Help me with: {task}"))
-    .WithVariables(new Dictionary<string, string>
+var result = await chain.RunAsync(new { concept = "dependency injection" });
+Console.WriteLine(result.Value);
+```
+
+### Structured output
+
+```csharp
+public sealed record MovieSuggestion(string Title, int Year, string Reason);
+
+var chain = Chain.Create(chatClient)
+    .Prompt<MovieSuggestion>("Suggest one movie about {theme}.")
+    .Build();
+
+var result = await chain.RunAsync(new { theme = "time travel" });
+Console.WriteLine($"{result.Value.Title} ({result.Value.Year})");
+```
+
+### Multi-step pipelines and tools
+
+```csharp
+var chain = Chain.Create(chatClient)
+    .WithTools(AIFunctionFactory.Create(GetWeather))
+    .Prompt<Outline>("Outline an article about {topic}.")
+    .Then<Article>(async (outline, context, ct) =>
     {
-        ["task"] = "writing a C# async method"
+        var response = await context.ChatClient.GetResponseAsync(
+            $"Write it: {string.Join(", ", outline.Sections)}", context.Options, ct);
+        return new Article(outline.Sections[0], response.Text);
     })
-    .AddStep(new YourLLMCallStep()); // Your LLM API integration here
-
-// 4. Execute
-var result = await workflow.ExecuteAsync();
-Console.WriteLine(result.Output);
+    .Build();
 ```
 
-### Common Use Cases
+See [`docs/getting-started.md`](docs/getting-started.md) for a full walkthrough, and
+[`examples/`](examples/) for runnable OpenAI, Azure OpenAI, and Agent Framework projects.
 
-#### Building a Chatbot
+## Core concepts
 
-```csharp
-var orchestrator = new LLMOrchestrator();
-orchestrator.Memory.AddSystemMessage("You are a friendly customer support agent.");
+| Concept | What it does |
+|---|---|
+| `Chain<TIn, TOut>` / `ChainBuilder` | Composes typed steps; `.Build()` produces an immutable, reusable pipeline. |
+| `PromptTemplate` | `{placeholder}` rendering with `{{ }}` escaping, so JSON-bearing prompts work. |
+| `ChainContext` | Per-run state: chat client, message history, options, usage, logger. Reuse it across calls for multi-turn conversations. |
+| `MessageCountReducer` | Bounds conversation history, always preserving system messages. |
+| `RetryingChatClient` | `IChatClient` middleware: capped exponential backoff with full jitter, correct transient-failure classification. |
+| `ChainActivitySource` | Per-step OpenTelemetry spans, alongside `UseOpenTelemetry()` on the chat client itself. |
 
-// Handle user messages
-while (true)
-{
-    var userMessage = Console.ReadLine();
-    orchestrator.Memory.AddUserMessage(userMessage);
-    
-    // Create prompt with history
-    var prompt = $"{orchestrator.Memory.GetFormattedHistory()}\n\nRespond to the last user message:";
-    
-    // Call your LLM API here with the prompt
-    var response = await CallYourLLMAsync(prompt);
-    
-    orchestrator.Memory.AddAssistantMessage(response);
-    Console.WriteLine(response);
-}
-```
+## Relationship to the rest of the .NET AI stack
 
-#### Content Generation Pipeline
+CogniChain doesn't compete with `Microsoft.Extensions.AI` or the Microsoft Agent Framework — it's a thin layer on top of the first and interoperable with the second:
 
-```csharp
-// Chain multiple AI operations
-var chain = Chain.Create()
-    .AddStep(new GenerateOutlineStep())      // Generate article outline
-    .AddStep(new ExpandSectionsStep())       // Expand each section
-    .AddStep(new ProofreadStep())            // Proofread content
-    .AddStep(new FormatMarkdownStep());      // Format as markdown
+- **`Microsoft.Extensions.AI`** is the provider abstraction (`IChatClient`, tools, middleware). CogniChain composes chains *out of* `IChatClient`; it never implements a provider itself.
+- **Microsoft Agent Framework** (`Microsoft.Agents.AI`) is the successor to Semantic Kernel's and AutoGen's agent abstractions, for multi-agent orchestration. `CogniChain.Agents` bridges the two: `chain.AsAIAgent()` and `agent.AsChainStep()`.
+- **Semantic Kernel** is in maintenance mode. If you're on it today, CogniChain slots in the same place Agent Framework does — as a typed layer above `IChatClient` — and doesn't require migrating off SK first.
 
-var article = await chain.RunAsync("Write about .NET performance tips");
-Console.WriteLine(article.Output);
-```
-
-#### Function Calling / Tool Use
-
-```csharp
-// Define tools your LLM can use
-public class WeatherTool : ToolBase
-{
-    public override string Name => "get_weather";
-    public override string Description => "Get current weather for a city";
-    
-    public override async Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
-    {
-        var weather = await WeatherApi.GetWeatherAsync(input);
-        return $"Temperature: {weather.Temp}°C, Conditions: {weather.Conditions}";
-    }
-}
-
-// Register and use
-orchestrator.Tools.RegisterTool(new WeatherTool());
-
-// When LLM wants to call the tool:
-var result = await orchestrator.Tools.ExecuteToolAsync("get_weather", "Seattle");
-```
-
-## Core Components Guide
-
-### 1. Prompt Templates
-
-Create reusable prompts with variable substitution:
-
-```csharp
-// Simple template
-var template = new PromptTemplate("Translate '{text}' to {language}");
-var prompt = template.Format(new { text = "Hello", language = "Spanish" });
-
-// Multi-variable template
-var reviewTemplate = new PromptTemplate(@"
-Review this {type} code:
-{code}
-
-Focus on: {aspects}
-");
-
-var prompt = reviewTemplate.Format(new Dictionary<string, string>
-{
-    ["type"] = "C#",
-    ["code"] = sourceCode,
-    ["aspects"] = "performance and readability"
-});
-```
-
-### 2. Conversation Memory
-
-Manage multi-turn conversations automatically:
-
-```csharp
-var memory = new ConversationMemory(maxMessages: 20);
-
-// System message sets behavior
-memory.AddSystemMessage("You are an expert C# developer.");
-
-// Add conversation turns
-memory.AddUserMessage("How do I use async/await?");
-memory.AddAssistantMessage("Async/await is used for asynchronous programming...");
-
-// Get history for context
-var history = memory.GetFormattedHistory(); // Pass to LLM
-var lastTwo = memory.GetLastMessages(2);    // Get recent messages
-```
-
-**Memory Management Tips:**
-- Use 10-20 messages for chatbots
-- Use 1-5 messages for focused tasks
-- System messages are preserved even when trimming
-
-### 3. Chain Workflows
-
-Build multi-step AI pipelines:
-
-```csharp
-public class LLMCallStep : IChainStep
-{
-    private readonly OpenAIClient _client;
-    
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        var response = await _client.GetCompletionAsync(input);
-        
-        return new ChainResult
-        {
-            Output = response,
-            Success = true,
-            Metadata = { ["tokens"] = response.TokenCount }
-        };
-    }
-}
-
-// Build pipeline
-var chain = Chain.Create()
-    .AddStep(new PreparePromptStep())
-    .AddStep(new LLMCallStep())
-    .AddStep(new ParseResponseStep());
-
-var result = await chain.RunAsync(userInput);
-```
-
-### 4. Retry & Resilience
-
-Handle API failures gracefully:
-
-```csharp
-var retryPolicy = new RetryPolicy
-{
-    MaxRetries = 3,              // Try up to 3 times
-    InitialDelayMs = 1000,       // Start with 1 second delay
-    BackoffMultiplier = 2.0,     // Double the delay each time
-    UseJitter = true             // Add randomness to prevent thundering herd
-};
-
-var retryHandler = new RetryHandler(retryPolicy);
-
-// Wrap your LLM call
-var response = await retryHandler.ExecuteAsync(async () =>
-{
-    return await openAIClient.GetCompletionAsync(prompt);
-});
-```
-
-### 5. Streaming Responses
-
-Provide real-time feedback to users:
-
-```csharp
-var streamingHandler = new StreamingHandler();
-
-// Your streaming LLM call
-async IAsyncEnumerable<string> StreamFromLLM()
-{
-    await foreach (var chunk in llmClient.StreamCompletionAsync(prompt))
-    {
-        yield return chunk.Text;
-    }
-}
-
-// Process stream with UI updates
-await streamingHandler.ProcessStreamAsync(
-    StreamFromLLM(), 
-    chunk => Console.Write(chunk)  // Update UI in real-time
-);
-```
-
-## Integration Examples
-
-### OpenAI Integration
-
-```csharp
-using OpenAI.Chat;
-
-public class OpenAIStep : IChainStep
-{
-    private readonly ChatClient _client;
-    
-    public OpenAIStep(ChatClient client)
-    {
-        _client = client;
-    }
-    
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        var response = await _client.CompleteChatAsync(input);
-        
-        return new ChainResult
-        {
-            Output = response.Value.Content[0].Text,
-            Success = true
-        };
-    }
-}
-
-// Use in workflow
-var client = new ChatClient("gpt-4", apiKey);
-var orchestrator = new LLMOrchestrator();
-
-var workflow = orchestrator.CreateWorkflow()
-    .WithPrompt(new PromptTemplate("Explain {concept} in simple terms"))
-    .WithVariables(new Dictionary<string, string> { ["concept"] = "dependency injection" })
-    .AddStep(new OpenAIStep(client));
-
-var result = await workflow.ExecuteAsync();
-```
-
-### Azure OpenAI Integration
-
-```csharp
-using Azure.AI.OpenAI;
-
-public class AzureOpenAIStep : IChainStep
-{
-    private readonly AzureOpenAIClient _client;
-    private readonly string _deploymentName;
-    
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        var chatCompletionsOptions = new ChatCompletionsOptions
-        {
-            DeploymentName = _deploymentName,
-            Messages = { new ChatRequestUserMessage(input) }
-        };
-        
-        var response = await _client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
-        
-        return new ChainResult
-        {
-            Output = response.Value.Choices[0].Message.Content,
-            Success = true
-        };
-    }
-}
-```
-
-### Semantic Kernel Integration
-
-```csharp
-using Microsoft.SemanticKernel;
-
-public class SemanticKernelStep : IChainStep
-{
-    private readonly Kernel _kernel;
-    
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        var result = await _kernel.InvokePromptAsync(input, cancellationToken: ct);
-        
-        return new ChainResult
-        {
-            Output = result.ToString(),
-            Success = true
-        };
-    }
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Q: My conversation history keeps growing, slowing down API calls**
-```csharp
-// A: Set a reasonable limit based on your use case
-var memory = new ConversationMemory(maxMessages: 10);  // Good for chatbots
-```
-
-**Q: API calls are failing intermittently**
-```csharp
-// A: Use retry logic with exponential backoff
-var orchestrator = new LLMOrchestrator(new OrchestratorConfig
-{
-    RetryPolicy = new RetryPolicy 
-    { 
-        MaxRetries = 3,
-        InitialDelayMs = 1000,
-        UseJitter = true 
-    }
-});
-```
-
-**Q: How do I pass context between chain steps?**
-```csharp
-// A: Use the Metadata dictionary
-public class Step1 : IChainStep
-{
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        return new ChainResult
-        {
-            Output = "processed",
-            Metadata = { ["userId"] = "123", ["timestamp"] = DateTime.UtcNow }
-        };
-    }
-}
-```
-
-**Q: Can I use this with local LLMs (Ollama, LM Studio)?**
-```csharp
-// A: Yes! Create a custom IChainStep that calls your local LLM API
-public class LocalLLMStep : IChainStep
-{
-    private readonly HttpClient _httpClient;
-    
-    public async Task<ChainResult> ExecuteAsync(string input, CancellationToken ct)
-    {
-        var response = await _httpClient.PostAsJsonAsync(
-            "http://localhost:11434/api/generate",
-            new { model = "llama2", prompt = input },
-            ct
-        );
-        
-        // Parse response based on your local LLM's API format
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
-        var output = result.GetProperty("response").GetString() ?? string.Empty;
-        
-        return new ChainResult { Output = output, Success = true };
-    }
-}
-```
-
-## FAQ
-
-**Do I need an LLM API key?**
-Yes. CogniChain is a framework for building LLM applications, not an LLM provider. Bring your own API client.
-
-**Which LLMs are supported?**
-Any LLM you can call from .NET! OpenAI, Azure OpenAI, Anthropic, Google, Ollama, etc. Just wrap calls in `IChainStep`.
-
-**Can I use this in production?**
-Yes! CogniChain includes retry logic, error handling, and is fully async for production workloads.
-
-**Is this compatible with Semantic Kernel or LangChain?**
-Yes! You can use CogniChain alongside or integrate it into those frameworks via custom steps.
-
-**How do I handle rate limits?**
-Use the built-in `RetryPolicy` with appropriate delays, or implement custom rate limiting in your chain steps.
+Upgrading from CogniChain 0.x? See [`docs/migration-v1.md`](docs/migration-v1.md).
 
 ## Documentation
 
-### For Users
-- 📘 [Getting Started Guide](docs/getting-started.md) - Step-by-step tutorial
-- 📗 [API Reference](docs/api-reference.md) - Complete API documentation
-- 📙 [Best Practices](docs/best-practices.md) - Production tips and patterns
-- 💡 [Examples](examples/CogniChain.Examples/) - Working code samples
+- 📘 [Getting Started](docs/getting-started.md)
+- 📗 [API Reference](docs/api-reference.md)
+- 📙 [Best Practices](docs/best-practices.md)
+- 🏗️ [Architecture](docs/architecture.md)
+- 🔀 [Migration from 0.x](docs/migration-v1.md)
+- 💡 [Examples](examples/) — [OpenAI](examples/CogniChain.Examples.OpenAI), [Azure OpenAI](examples/CogniChain.Examples.Azure), [Agent Framework](examples/CogniChain.Examples.AgentFramework)
 
-### For Contributors
-- 🏗️ [Architecture Guide](docs/architecture.md) - Internal design and patterns
-- 🤝 [Contributing](CONTRIBUTING.md) - How to contribute
-- 🔒 [Security](SECURITY.md) - Security policy
+## Community & support
 
-## Community & Support
-
-- 💬 [GitHub Discussions](https://github.com/wouternijenhuis/CogniChain/discussions) - Ask questions and share ideas
-- 🐛 [Issue Tracker](https://github.com/wouternijenhuis/CogniChain/issues) - Report bugs or request features
-- 📖 [Changelog](CHANGELOG.md) - See what's new
+- 💬 [GitHub Discussions](https://github.com/wouternijenhuis/CogniChain/discussions)
+- 🐛 [Issue Tracker](https://github.com/wouternijenhuis/CogniChain/issues)
+- 🤝 [Contributing](CONTRIBUTING.md) · 🔒 [Security](SECURITY.md) · 📖 [Changelog](CHANGELOG.md)
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
-**Built with ❤️ for the .NET community** | [Star on GitHub](https://github.com/wouternijenhuis/CogniChain) ⭐
+**Built with ❤️ for the .NET community**, by [DevDad.net](https://devdad.net) | [Star on GitHub](https://github.com/wouternijenhuis/CogniChain) ⭐

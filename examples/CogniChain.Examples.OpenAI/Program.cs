@@ -1,27 +1,27 @@
 using CogniChain.Examples.OpenAI.Configuration;
 using CogniChain.Examples.OpenAI.Examples;
-using CogniChain.Examples.OpenAI.Services;
+using CogniChain.Examples.Shared;
+using CogniChain.Middleware;
+using Microsoft.Extensions.AI;
+using OpenAI;
 
-// Load configuration
 var settings = OpenAISettings.FromEnvironment();
 
-// Create services
-var clientFactory = new OpenAIChatClientFactory(settings);
-var chatClient = clientFactory.CreateChatClient();
+IChatClient chatClient = new OpenAIClient(settings.ApiKey)
+    .GetChatClient(settings.Model)
+    .AsIChatClient()
+    .AsBuilder()
+    .UseFunctionInvocation()
+    .UseCogniChainRetry()
+    .Build();
 
-Console.WriteLine($"Using model: {settings.Model}\n");
-
-// Create examples - each focused on a single responsibility
-var examples = new IExample[]
-{
-    new BasicChainStepExample(chatClient),
+IExample[] examples =
+[
+    new BasicPromptExample(chatClient),
+    new StructuredOutputExample(chatClient),
     new MultiTurnConversationExample(chatClient),
-    new MultiStepChainExample(chatClient),
-    new RetryHandlerExample(chatClient),
-    new StreamingHandlerExample(chatClient),
-    new ToolIntegrationExample()
-};
+    new ToolCallingExample(chatClient),
+    new StreamingExample(chatClient),
+];
 
-// Run all examples
-var runner = new ExampleRunner(examples);
-await runner.RunAllAsync();
+await ExampleRunner.RunAllAsync(examples);

@@ -14,22 +14,22 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    
+
     permissions:
       contents: write  # Required for creating releases
       packages: write  # Required for publishing packages
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Fetch all history for proper versioning
-      
+
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      
+
       - name: Extract version from tag
         id: version
         run: |
@@ -37,25 +37,27 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
-      
+
       - name: Restore dependencies
         run: dotnet restore
-      
+
       - name: Build
         run: dotnet build --configuration Release --no-restore
-      
+
       - name: Run tests
-        run: dotnet test --configuration Release --no-build --verbosity normal
-      
-      - name: Pack NuGet package
+        run: dotnet test --configuration Release --no-build -- --report-xunit-trx
+
+      - name: Pack NuGet packages
         run: |
-          dotnet pack src/CogniChain/CogniChain.csproj \
-            --configuration Release \
-            --no-build \
-            --output ./artifacts \
-            /p:PackageVersion=${{ steps.version.outputs.version }} \
-            /p:Version=${{ steps.version.outputs.version }}
-      
+          for csproj in src/CogniChain/CogniChain.csproj src/CogniChain.Agents/CogniChain.Agents.csproj; do
+            dotnet pack "$csproj" \
+              --configuration Release \
+              --no-build \
+              --output ./artifacts \
+              /p:PackageVersion=${{ steps.version.outputs.version }} \
+              /p:Version=${{ steps.version.outputs.version }}
+          done
+
       - name: Generate release notes
         id: release_notes
         run: |
@@ -66,41 +68,45 @@ jobs:
           else
             COMMITS=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD)
           fi
-          
+
           # Create release notes file
           cat > release_notes.md << EOF
           ## Changes in this release
-          
+
           ${COMMITS}
-          
+
           ## Installation
-          
+
           Install via NuGet Package Manager:
           \`\`\`
           Install-Package CogniChain -Version ${{ steps.version.outputs.version }}
           \`\`\`
-          
+
           Or via .NET CLI:
           \`\`\`
           dotnet add package CogniChain --version ${{ steps.version.outputs.version }}
+          dotnet add package CogniChain.Agents --version ${{ steps.version.outputs.version }}
           \`\`\`
-          
+
           ## Framework Support
           - .NET 10.0
-          
+
           ## Features
-          - Prompt templates with variable interpolation
-          - Chain orchestration for multi-step workflows
-          - Tool calling integration
-          - Conversation memory management
-          - Retry policies for resilient workflows
-          - Streaming support for real-time responses
+          - Typed chain steps over Microsoft.Extensions.AI's IChatClient, with structured output
+          - Prompt templates with variable interpolation and \`{{ }}\` escaping
+          - Tool calling via AIFunction / automatic function invocation
+          - Conversation history via ChatMessage + IChatReducer
+          - Resilient IChatClient middleware (retry, caching, telemetry)
+          - Real token streaming
+          - CogniChain.Agents: bridge to Microsoft Agent Framework (AIAgent)
+
+          See [migration guide](https://github.com/wouternijenhuis/CogniChain/blob/main/docs/migration-v1.md) if upgrading from 0.x.
           EOF
-          
+
           echo "Release notes generated"
-      
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ steps.version.outputs.version }}
           body_path: release_notes.md
@@ -111,7 +117,7 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Publish to NuGet.org
         if: ${{ !contains(steps.version.outputs.version, '-') }}  # Only publish stable releases
         run: |
@@ -120,12 +126,12 @@ jobs:
             dotnet nuget push "$package" \
               --api-key ${{ secrets.NUGET_API_KEY }} \
               --source https://api.nuget.org/v3/index.json \
-              --skip-duplicate || true
+              --skip-duplicate
           done
           echo "NuGet push completed"
-      
+
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg

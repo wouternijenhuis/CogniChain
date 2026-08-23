@@ -1,22 +1,14 @@
 namespace CogniChain.Examples.OpenAI.Configuration;
 
-/// <summary>
-/// Configuration settings for OpenAI service.
-/// </summary>
-public class OpenAISettings
+/// <summary>Reads OpenAI connection settings from environment variables.</summary>
+public sealed record OpenAISettings(string ApiKey, string Model)
 {
-    public string ApiKey { get; set; } = string.Empty;
-    public string Model { get; set; } = "gpt-4o-mini";
-
     public static OpenAISettings FromEnvironment()
     {
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-            ?? throw new InvalidOperationException("Please set the OPENAI_API_KEY environment variable.");
+            ?? throw new InvalidOperationException("Set the OPENAI_API_KEY environment variable before running this example.");
+        var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-5-mini";
 
-        return new OpenAISettings
-        {
-            ApiKey = apiKey,
-            Model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini"
-        };
+        return new OpenAISettings(apiKey, model);
     }
 }

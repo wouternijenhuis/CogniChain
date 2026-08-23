@@ -1,18 +1,11 @@
-using CogniChain;
+using System.ComponentModel;
 
 namespace CogniChain.Examples.Azure.Tools;
 
-/// <summary>
-/// Tool for querying Azure resources.
-/// </summary>
-public class AzureResourceTool : ToolBase
+/// <summary>A simulated Azure resource lookup.</summary>
+public sealed class AzureResourceTool
 {
-    public override string Name => "azure_resources";
-    public override string Description => "Query Azure resources in the subscription";
-
-    public override Task<string> ExecuteAsync(string input, CancellationToken cancellationToken = default)
-    {
-        // Simulated Azure resource query - replace with actual Azure SDK calls
-        return Task.FromResult($"Found 3 storage accounts matching '{input}' (simulated)");
-    }
+    [Description("Looks up the simulated status of an Azure resource.")]
+    public string GetResourceStatus([Description("The resource name, e.g. 'my-app-service'.")] string resourceName) =>
+        $"Resource '{resourceName}' is Running in West Europe, SKU Standard_B2s. (simulated)";
 }
