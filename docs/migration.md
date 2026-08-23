@@ -1,13 +1,14 @@
-# Migrating from CogniChain 0.x to 1.0
+# Migrating from CogniChain 0.2.x to 0.3.0
 
-CogniChain 1.0 is a rebuild on `Microsoft.Extensions.AI`'s `IChatClient`, replacing the 0.x
-string-in/string-out API entirely. There is no compatibility shim — 0.x was pre-1.0, and the old API's
-headline features (conversation memory, tool calling, streaming) didn't actually work end-to-end, so a
-clean break was cheaper than papering over them. See the [README](../README.md#why-cognichain) for why.
+CogniChain 0.3.0 is a rebuild on `Microsoft.Extensions.AI`'s `IChatClient`, replacing the 0.2.x
+string-in/string-out API entirely. There is no compatibility shim — this project is still pre-1.0, and
+the old API's headline features (conversation memory, tool calling, streaming) didn't actually work
+end-to-end, so a clean break was cheaper than papering over them. See the
+[README](../README.md#why-cognichain) for why.
 
 ## Type mapping
 
-| 0.x | 1.0 | Notes |
+| 0.2.x | 0.3.0 | Notes |
 |---|---|---|
 | `IChainStep` (`string → ChainResult`) | `IChainStep<TIn, TOut>` | Typed, and receives a `ChainContext`. |
 | `Chain` / `Chain.Create()` / `.AddStep()` | `Chain<TIn, TOut>` / `Chain.Create(chatClient)` / `.Then(...)` | Requires an `IChatClient`; steps are typed. |
@@ -21,7 +22,7 @@ clean break was cheaper than papering over them. See the [README](../README.md#w
 
 ## Before / after
 
-**0.x:**
+**0.2.x:**
 
 ```csharp
 var orchestrator = new LLMOrchestrator(new OrchestratorConfig { RetryPolicy = new RetryPolicy { MaxRetries = 3 } });
@@ -36,7 +37,7 @@ var result = await workflow.ExecuteAsync();
 Console.WriteLine(result.Output);
 ```
 
-**1.0:**
+**0.3.0:**
 
 ```csharp
 IChatClient chatClient = /* your provider's IChatClient, see docs/getting-started.md */;
@@ -50,19 +51,19 @@ var result = await chain.RunAsync(new { task = "writing a C# async method" });
 Console.WriteLine(result.Value);
 ```
 
-The 1.0 version calls the model itself — there's no `YourLLMCallStep` to write, and the system message
-actually reaches it.
+The 0.3.0 version calls the model itself — there's no `YourLLMCallStep` to write, and the system
+message actually reaches it.
 
 ## Tool calling
 
-**0.x** (the model never actually chose to call this — you called it by name yourself):
+**0.2.x** (the model never actually chose to call this — you called it by name yourself):
 
 ```csharp
 orchestrator.Tools.RegisterTool(new WeatherTool());
 var result = await orchestrator.Tools.ExecuteToolAsync("get_weather", "Seattle");
 ```
 
-**1.0** (the model decides, based on the conversation, whether to call it):
+**0.3.0** (the model decides, based on the conversation, whether to call it):
 
 ```csharp
 var chain = Chain.Create(chatClient)

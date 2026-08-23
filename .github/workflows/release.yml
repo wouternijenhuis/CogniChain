@@ -100,7 +100,7 @@ jobs:
           - Real token streaming
           - CogniChain.Agents: bridge to Microsoft Agent Framework (AIAgent)
 
-          See [migration guide](https://github.com/wouternijenhuis/CogniChain/blob/main/docs/migration-v1.md) if upgrading from 0.x.
+          See [migration guide](https://github.com/wouternijenhuis/CogniChain/blob/main/docs/migration.md) if upgrading from 0.x.
           EOF
 
           echo "Release notes generated"
