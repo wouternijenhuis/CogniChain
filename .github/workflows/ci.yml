@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
   workflow_dispatch:
 
 # Cost guard: a newer run supersedes an older one on the same ref.
@@ -19,31 +19,34 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-      
+      uses: actions/checkout@v7
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: '10.0.x'
-        
+
     - name: Restore dependencies
       run: dotnet restore
-      
+
+    - name: Format check
+      run: dotnet format --verify-no-changes --no-restore
+
     - name: Build
       run: dotnet build --configuration Release --no-restore
-      
+
     - name: Test
-      run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
-      
+      run: dotnet test --configuration Release --no-build -- --report-xunit-trx --coverage --coverage-output-format cobertura
+
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       if: success()
       with:
         fail_ci_if_error: false
-        
+
   package:
     name: Create NuGet Package
     runs-on: ubuntu-latest
@@ -52,27 +55,29 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
-    
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-      
+      uses: actions/checkout@v7
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: '10.0.x'
-        
+
     - name: Restore dependencies
       run: dotnet restore
-      
+
     - name: Build
       run: dotnet build --configuration Release --no-restore
-      
+
     - name: Pack
-      run: dotnet pack src/CogniChain/CogniChain/CogniChain.csproj --configuration Release --no-build --output ./artifacts
-      
+      run: |
+        dotnet pack src/CogniChain/CogniChain.csproj --configuration Release --no-build --output ./artifacts
+        dotnet pack src/CogniChain.Agents/CogniChain.Agents.csproj --configuration Release --no-build --output ./artifacts
+
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: nuget-package
         path: ./artifacts/*.nupkg

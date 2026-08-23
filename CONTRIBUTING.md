@@ -1,225 +1,105 @@
 # Contributing to CogniChain
 
-Thank you for your interest in contributing to CogniChain! This document provides guidelines and instructions for contributing.
+Thanks for your interest in contributing! This document covers the essentials — see the
+[Code of Conduct](CODE_OF_CONDUCT.md) too.
 
-## Code of Conduct
+## Reporting bugs / suggesting features
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+Open an issue with a clear title, repro steps (or a use case, for a feature request), and your .NET
+version. Check existing issues first.
 
-## How to Contribute
+## Pull requests
 
-### Reporting Bugs
+1. Fork the repo and branch from `main`: `git checkout -b feature/my-change`.
+2. Make your change: follow the existing code style, add tests, update docs for user-facing changes.
+3. Verify locally (see below).
+4. Open a PR with a clear title/description and a link to any related issue.
 
-If you find a bug, please create an issue with:
+## Development setup
 
-- A clear, descriptive title
-- Detailed steps to reproduce
-- Expected vs. actual behavior
-- Code samples (if applicable)
-- Environment details (.NET version, OS, etc.)
+Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (the version pinned in
+`global.json`), a code editor, Git.
 
-### Suggesting Features
-
-We welcome feature suggestions! Please:
-
-- Check if the feature has already been requested
-- Provide a clear use case
-- Explain the expected behavior
-- Consider backward compatibility
-
-### Pull Requests
-
-1. **Fork the repository** and create your branch from `main`:
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-2. **Make your changes**:
-   - Write clear, concise commit messages
-   - Follow the existing code style
-   - Add tests for new functionality
-   - Update documentation as needed
-
-3. **Test your changes**:
-   ```bash
-   dotnet build
-   dotnet test
-   ```
-
-4. **Submit your PR** with:
-   - A clear title and description
-   - Reference to any related issues
-   - Screenshots for UI changes (if applicable)
-
-## Development Setup
-
-### Prerequisites
-
-- .NET 10 SDK or later
-- A code editor (Visual Studio, VS Code, or Rider)
-- Git
-
-### Getting Started
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/wouternijenhuis/CogniChain.git
-   cd CogniChain
-   ```
-
-2. Restore dependencies:
-   ```bash
-   dotnet restore
-   ```
-
-3. Build the solution:
-   ```bash
-   dotnet build
-   ```
-
-4. Run tests:
-   ```bash
-   dotnet test
-   ```
-
-5. Run examples:
-   ```bash
-   dotnet run --project examples/CogniChain.Examples/CogniChain.Examples/CogniChain.Examples.csproj
-   ```
-
-## Coding Standards
-
-### C# Style Guidelines
-
-- Follow [C# Coding Conventions](https://docs.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions)
-- Use meaningful variable and method names
-- Keep methods focused and concise
-- Add XML documentation comments for public APIs
-
-### Code Structure
-
-```csharp
-namespace CogniChain;
-
-/// <summary>
-/// Brief description of the class.
-/// </summary>
-public class MyClass
-{
-    /// <summary>
-    /// Description of the method.
-    /// </summary>
-    /// <param name="parameter">Parameter description.</param>
-    /// <returns>Return value description.</returns>
-    public string MyMethod(string parameter)
-    {
-        // Implementation
-    }
-}
+```bash
+git clone https://github.com/wouternijenhuis/CogniChain.git
+cd CogniChain
+dotnet restore
+dotnet build
+dotnet test
+dotnet format --verify-no-changes   # what CI checks; drop --verify-no-changes to auto-fix
 ```
 
-### Naming Conventions
+To run an example (needs a real provider key — see each project's README):
 
-- **Classes**: PascalCase (e.g., `PromptTemplate`)
-- **Methods**: PascalCase (e.g., `ExecuteAsync`)
-- **Parameters**: camelCase (e.g., `inputText`)
-- **Private fields**: _camelCase (e.g., `_repository`)
-- **Constants**: PascalCase (e.g., `MaxRetries`)
+```bash
+dotnet run --project examples/CogniChain.Examples.OpenAI/CogniChain.Examples.OpenAI.csproj
+```
 
-### Testing
+### Regenerating the package icon
 
-- Write unit tests for all new functionality
-- Use descriptive test names: `MethodName_Scenario_ExpectedBehavior`
-- Follow the Arrange-Act-Assert pattern
-- Aim for high code coverage
+`icon.png` is committed and used as-is by the packing target; it isn't regenerated automatically. To
+rebuild it from `icon.svg` after an edit:
 
-Example:
+```bash
+dotnet tool restore
+dotnet Svg.Skia.Converter -f icon.svg --outputFiles icon.png
+```
+
+## Coding standards
+
+- Follow the [C# coding conventions](https://learn.microsoft.com/dotnet/csharp/fundamentals/coding-style/coding-conventions).
+- XML doc comments on every public member.
+- Naming: `PascalCase` types/methods, `camelCase` parameters/locals, `_camelCase` private fields.
+
+## Testing
+
+- xUnit v3 on Microsoft Testing Platform (`tests/CogniChain.Tests`). Test names:
+  `MethodName_Scenario_ExpectedBehavior`. Arrange/Act/Assert, with those comments in place.
+- Test against `Microsoft.Extensions.AI.IChatClient`, not a real provider — see
+  `tests/CogniChain.Tests/Fakes/FakeChatClient.cs` and
+  [`docs/best-practices.md`](docs/best-practices.md#testing).
+
 ```csharp
 [Fact]
-public async Task ExecuteAsync_WithValidInput_ReturnsSuccess()
+public async Task RunAsync_SequentialThenSteps_PipesOutputThroughEachStep()
 {
     // Arrange
-    var step = new MyStep();
-    var input = "test";
+    var client = new FakeChatClient();
+    var chain = Chain.Create<string>(client).Then<string>(input => input.ToUpperInvariant()).Build();
 
     // Act
-    var result = await step.ExecuteAsync(input);
+    var result = await chain.RunAsync("hello");
 
     // Assert
-    Assert.True(result.Success);
-    Assert.Equal("expected", result.Output);
+    Assert.Equal("HELLO", result.Value);
 }
 ```
 
-## Documentation
+## Commit messages
 
-- Update README.md for user-facing changes
-- Update API reference for new public APIs
-- Add examples for new features
-- Keep documentation clear and concise
+First line a brief summary (≤ 50 chars), blank line, detail if needed, issue reference if applicable.
 
-## Commit Messages
+## Review process
 
-Write clear commit messages:
+CI (build, `dotnet format` check, tests) must pass. At least one maintainer approval is required;
+PRs are squash-merged.
 
-```
-Add retry logic to chain execution
+## Release process (maintainers)
 
-- Implement exponential backoff
-- Add configurable retry policy
-- Include unit tests
+1. Update `CHANGELOG.md`.
+2. Bump `<Version>` in `src/CogniChain/CogniChain.csproj` and `src/CogniChain.Agents/CogniChain.Agents.csproj`.
+3. Tag `vX.Y.Z` and push — `release.yml` packs, tests, publishes the GitHub release, and pushes to
+   NuGet for stable (non-prerelease) tags.
 
-Fixes #123
-```
+## Getting help
 
-Format:
-- First line: Brief summary (50 chars or less)
-- Blank line
-- Detailed description (if needed)
-- Reference issues/PRs
-
-## Review Process
-
-1. **Automated checks** run on all PRs:
-   - Build verification
-   - Test execution
-   - Code quality checks
-
-2. **Code review** by maintainers:
-   - Code quality and style
-   - Test coverage
-   - Documentation completeness
-
-3. **Approval and merge**:
-   - At least one maintainer approval required
-   - All checks must pass
-   - Squash and merge for clean history
-
-## Release Process
-
-Maintainers handle releases:
-
-1. Update CHANGELOG.md
-2. Update version in project file
-3. Create release tag
-4. Publish to NuGet
-
-## Getting Help
-
-- 💬 [GitHub Discussions](https://github.com/wouternijenhuis/CogniChain/discussions) for questions
-- 🐛 [GitHub Issues](https://github.com/wouternijenhuis/CogniChain/issues) for bugs
-- 📧 Contact maintainers for security issues (see SECURITY.md)
-
-## Recognition
-
-Contributors are recognized in:
-- CHANGELOG.md for their contributions
-- README.md contributors section
-- Release notes
+- 💬 [GitHub Discussions](https://github.com/wouternijenhuis/CogniChain/discussions)
+- 🐛 [GitHub Issues](https://github.com/wouternijenhuis/CogniChain/issues)
+- 🔒 Security issues: see [SECURITY.md](SECURITY.md)
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree your contributions are licensed under the MIT License.
 
 ---
 

@@ -2,14 +2,17 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\CogniChain\CogniChain.csproj" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="OpenAI" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenAI" />
+    <ProjectReference Include="..\..\src\CogniChain\CogniChain.csproj" />
+    <ProjectReference Include="..\CogniChain.Examples.Shared\CogniChain.Examples.Shared.csproj" />
   </ItemGroup>
 
 </Project>

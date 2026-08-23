@@ -1,24 +1,32 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Build settings -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <!--
+      Not marked IsTrimmable: PromptTemplate.Render(object) and ChainBuilder.WithToolsFrom reflect over
+      arbitrary user types by design (rendering a template against a POCO's properties; wrapping a
+      service's methods as tools). Both are annotated [RequiresUnreferencedCode] so trimmed/AOT
+      consumers get a warning at their call sites; use the dictionary-based Render overload or
+      WithTools(AIFunctionFactory.Create(...)) instead when trimming.
+    -->
 
     <!-- Package identity -->
     <PackageId>CogniChain</PackageId>
-    <Version>0.1.0</Version>
-    <Authors>Wouter Nijenhuis</Authors>
-    <Company>Wouter Nijenhuis</Company>
-    <Copyright>Copyright (c) Wouter Nijenhuis 2026</Copyright>
+    <Version>1.0.0</Version>
+    <Authors>Wouter Nijenhuis (DevDad.net)</Authors>
+    <Company>Wouter Nijenhuis (DevDad.net)</Company>
+    <Copyright>Copyright © 2026 Wouter Nijenhuis — DevDad.net</Copyright>
 
     <!-- Package description -->
     <Title>CogniChain</Title>
-    <Description>A .NET library for orchestrating LLM workflows with prompt templates, chains, tools, memory, retries, and streaming support. Build reliable AI-powered applications with conversation memory, tool calling, resilient workflows, and real-time streaming.</Description>
-    <Summary>Modern .NET library for building LLM-powered applications with workflow orchestration, prompt management, and tool integration.</Summary>
+    <Description>Typed, composable chain steps over Microsoft.Extensions.AI's IChatClient. Prompt templates, structured output, tool calling via AIFunction, resilient middleware, and real token streaming for .NET LLM applications.</Description>
+    <Summary>A typed chain layer over Microsoft.Extensions.AI for building LLM-powered .NET applications.</Summary>
 
     <!-- Package discoverability -->
-    <PackageTags>LLM;AI;OpenAI;ChatGPT;Chains;Prompts;Agent;Orchestration;dotnet;csharp;machine-learning;artificial-intelligence;nlp;chatbot;workflow;automation</PackageTags>
+    <PackageTags>LLM;AI;Microsoft.Extensions.AI;IChatClient;OpenAI;Chains;Prompts;Agent;Orchestration;dotnet;csharp;machine-learning;artificial-intelligence;chatbot;workflow;devdad</PackageTags>
 
     <!-- Package licensing -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -35,36 +43,23 @@
     <!-- Package release notes - link to changelog -->
     <PackageReleaseNotes>See https://github.com/wouternijenhuis/CogniChain/blob/main/CHANGELOG.md for release notes.</PackageReleaseNotes>
 
-    <!-- Source Link and deterministic builds for debugging -->
+    <!-- Deterministic builds -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
-  <!-- Source Link for better debugging experience -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
-
-  <!-- SVG to PNG conversion for package icon -->
-  <PropertyGroup>
-    <SvgIconSource>$(MSBuildThisFileDirectory)../../icon.svg</SvgIconSource>
-    <PngIconOutput>$(MSBuildThisFileDirectory)../../icon.png</PngIconOutput>
-  </PropertyGroup>
-
-  <Target Name="ConvertSvgToPng" BeforeTargets="_GetPackageFiles;GenerateNuspec" Condition="Exists('$(SvgIconSource)')">
-    <Message Importance="high" Text="Converting SVG icon to PNG for NuGet package..."/>
-    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildThisFileDirectory)../.." IgnoreExitCode="true" StandardOutputImportance="low"/>
-    <Exec Command="dotnet Svg.Skia.Converter -f &quot;$(SvgIconSource)&quot; --outputFiles &quot;$(PngIconOutput)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)../.." StandardOutputImportance="low"/>
-    <ItemGroup>
-      <None Include="$(PngIconOutput)" Pack="true" PackagePath="/"/>
-    </ItemGroup>
-  </Target>
 
   <!-- Package assets -->
   <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/"/>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../icon.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

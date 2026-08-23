@@ -1,27 +1,19 @@
 namespace CogniChain.Examples.Azure.Configuration;
 
-/// <summary>
-/// Configuration settings for Azure OpenAI service.
-/// </summary>
-public class AzureOpenAISettings
+/// <summary>Reads Azure OpenAI connection settings from environment variables.</summary>
+public sealed record AzureOpenAISettings(Uri Endpoint, string Deployment, string? ApiKey)
 {
-    public string Endpoint { get; set; } = string.Empty;
-    public string DeploymentName { get; set; } = "gpt-4o-mini";
-    public string? ApiKey { get; set; }
-    public string ApiVersion { get; set; } = "2025-01-01-preview";
+    /// <summary>Gets a value indicating whether to authenticate with <c>DefaultAzureCredential</c> instead of an API key.</summary>
     public bool UseAzureIdentity => string.IsNullOrEmpty(ApiKey);
 
     public static AzureOpenAISettings FromEnvironment()
     {
         var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
-            ?? throw new InvalidOperationException("Please set the AZURE_OPENAI_ENDPOINT environment variable.");
+            ?? throw new InvalidOperationException("Set the AZURE_OPENAI_ENDPOINT environment variable before running this example.");
+        var deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+            ?? throw new InvalidOperationException("Set the AZURE_OPENAI_DEPLOYMENT environment variable before running this example.");
+        var apiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
 
-        return new AzureOpenAISettings
-        {
-            Endpoint = endpoint,
-            DeploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT") ?? "gpt-4o-mini",
-            ApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY"),
-            ApiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION") ?? "2025-01-01-preview"
-        };
+        return new AzureOpenAISettings(new Uri(endpoint), deployment, apiKey);
     }
 }

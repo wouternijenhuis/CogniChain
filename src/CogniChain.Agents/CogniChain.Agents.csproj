@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Build settings -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <EnablePackageValidation>true</EnablePackageValidation>
+
+    <!-- Package identity -->
+    <PackageId>CogniChain.Agents</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Wouter Nijenhuis (DevDad.net)</Authors>
+    <Company>Wouter Nijenhuis (DevDad.net)</Company>
+    <Copyright>Copyright © 2026 Wouter Nijenhuis — DevDad.net</Copyright>
+
+    <!-- Package description -->
+    <Title>CogniChain.Agents</Title>
+    <Description>Bridges CogniChain chains to the Microsoft Agent Framework: run a chain as an AIAgent, or drop an AIAgent into a chain as a step.</Description>
+    <Summary>Microsoft Agent Framework bridge for CogniChain.</Summary>
+
+    <!-- Package discoverability -->
+    <PackageTags>LLM;AI;CogniChain;AgentFramework;Microsoft.Agents.AI;AIAgent;Agent;Orchestration;dotnet;csharp;devdad</PackageTags>
+
+    <!-- Package licensing -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Package links -->
+    <PackageProjectUrl>https://github.com/wouternijenhuis/CogniChain</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/wouternijenhuis/CogniChain</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Package assets -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+
+    <!-- Package release notes - link to changelog -->
+    <PackageReleaseNotes>See https://github.com/wouternijenhuis/CogniChain/blob/main/CHANGELOG.md for release notes.</PackageReleaseNotes>
+
+    <!-- Deterministic builds -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CogniChain\CogniChain.csproj" />
+  </ItemGroup>
+
+  <!-- Package assets -->
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../icon.png" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

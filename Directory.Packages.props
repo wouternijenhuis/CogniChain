@@ -2,27 +2,39 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Build and Source Link -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.102" />
+    <!-- Microsoft.Extensions.AI - the core abstraction CogniChain builds on -->
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
 
-    <!-- Azure packages -->
-    <PackageVersion Include="Azure.AI.OpenAI" Version="2.3.0-beta.1" />
-    <PackageVersion Include="Azure.Identity" Version="1.13.2" />
+    <!-- Microsoft Agent Framework - CogniChain.Agents bridge -->
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
 
-    <!-- OpenAI -->
-    <PackageVersion Include="OpenAI" Version="2.8.0" />
+    <!-- Model Context Protocol - example tool sourcing -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
 
-    <!-- Semantic Kernel -->
-    <PackageVersion Include="Microsoft.SemanticKernel" Version="1.70.0" />
+    <!-- Provider SDKs (examples only) -->
+    <!-- OpenAI is pinned to the version Microsoft.Extensions.AI.OpenAI 10.9.0 declares a dependency on. -->
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
+    <PackageVersion Include="OpenAI" Version="2.12.0" />
+    <PackageVersion Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
 
-    <!-- Testing packages -->
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-    <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <!-- Configuration (examples only) -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.11" />
+
+    <!-- Testing -->
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
   </ItemGroup>
 
 </Project>
