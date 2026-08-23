@@ -145,6 +145,97 @@ public class ChainTests
     }
 
     [Fact]
+    public async Task Branch_NestedChain_UsesItsOwnChatClientToolsAndSystemMessage()
+    {
+        // Arrange: regression test — a Branch sub-chain must run against its own configured chat
+        // client, tools, and system message, not silently against the parent's.
+        var outerClient = new FakeChatClient();
+        var innerClient = new FakeChatClient();
+        innerClient.EnqueueResponse("branch response");
+        var tool = AIFunctionFactory.Create(() => "42", name: "answer");
+
+        var whenTrue = Chain.Create<int>(innerClient)
+            .WithSystemMessage("Branch-specific instructions.")
+            .WithTools(tool)
+            .Then<string>(async (n, context, ct) =>
+            {
+                context.Messages.Add(new ChatMessage(ChatRole.User, n.ToString()));
+                var response = await context.ChatClient.GetResponseAsync(context.Messages, context.Options, ct);
+                return response.Text;
+            })
+            .Build();
+        var whenFalse = Chain.Create<int>(innerClient).Then<string>(_ => "unused").Build();
+        var chain = Chain.Create<int>(outerClient).Branch(n => n % 2 == 0, whenTrue, whenFalse).Build();
+
+        // Act
+        var result = await chain.RunAsync(4);
+
+        // Assert
+        Assert.Equal("branch response", result.Value);
+        Assert.Equal(0, outerClient.CallCount);
+        Assert.Equal(1, innerClient.CallCount);
+        Assert.Contains(innerClient.Requests[0], m => m.Role == ChatRole.System && m.Text == "Branch-specific instructions.");
+        Assert.Contains(innerClient.RequestOptions[0]!.Tools!, t => t.Name == "answer");
+    }
+
+    [Fact]
+    public async Task Branch_NestedChainStepFailure_IsNotDoubleWrappedInChainStepException()
+    {
+        // Arrange: regression test — a failure inside a Branch sub-chain's own step must surface with
+        // the ORIGINAL exception as InnerException, not a ChainStepException wrapping a ChainStepException.
+        var client = new FakeChatClient();
+        var whenTrue = Chain.Create<int>(client)
+            .Then<string>(_ => throw new InvalidOperationException("boom"), name: "inner-step")
+            .Build();
+        var whenFalse = Chain.Create<int>(client).Then<string>(_ => "unused").Build();
+        var chain = Chain.Create<int>(client).Branch(_ => true, whenTrue, whenFalse, name: "the-branch").Build();
+
+        // Act
+        var exception = await Assert.ThrowsAsync<ChainStepException>(() => chain.RunAsync(1));
+
+        // Assert: identifies the actual failing step inside the sub-chain, with the original exception
+        // directly as InnerException.
+        Assert.Equal("inner-step", exception.StepName);
+        Assert.Equal(0, exception.StepIndex);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal("boom", exception.InnerException!.Message);
+    }
+
+    [Fact]
+    public void WithTools_DuplicateToolName_ThrowsInvalidOperationException()
+    {
+        // Arrange: regression test — the deleted ToolRegistry rejected duplicate tool names; WithTools
+        // must too, rather than silently sending the model a ChatOptions.Tools list with duplicates.
+        var client = new FakeChatClient();
+        var toolA = AIFunctionFactory.Create(() => "1", name: "shared");
+        var toolB = AIFunctionFactory.Create(() => "2", name: "shared");
+
+        // Act & Assert
+        Assert.Throws<InvalidOperationException>(() => Chain.Create(client).WithTools(toolA).WithTools(toolB));
+    }
+
+    [Fact]
+    public async Task WithToolsFrom_RecordType_ExcludesSynthesizedMembers()
+    {
+        // Arrange: regression test — record-synthesized ToString/Equals/GetHashCode/Deconstruct must
+        // not become model-callable tools alongside a record's real business methods.
+        var client = new FakeChatClient();
+        client.EnqueueResponse("ok");
+        var chain = Chain.Create(client).WithToolsFrom(new CalculatorService()).Prompt("hi").Build();
+
+        // Act
+        await chain.RunAsync(new { });
+
+        // Assert
+        var toolNames = Assert.Single(client.RequestOptions)!.Tools!.Select(t => t.Name).ToList();
+        Assert.Contains("Add", toolNames);
+        Assert.DoesNotContain("ToString", toolNames);
+        Assert.DoesNotContain("Equals", toolNames);
+        Assert.DoesNotContain("GetHashCode", toolNames);
+        Assert.DoesNotContain("Deconstruct", toolNames);
+    }
+
+    [Fact]
     public async Task Prompt_SendsRenderedTemplateAndReturnsResponseText()
     {
         // Arrange
@@ -264,6 +355,42 @@ public class ChainTests
     }
 
     [Fact]
+    public async Task RunStreamingAsync_CancelledMidStream_PersistsPartialResponseToContextMessages()
+    {
+        // Arrange: regression test — cancelling mid-stream (or otherwise not draining it fully) must
+        // not leave the just-added user message orphaned with no matching assistant reply.
+        var client = new FakeChatClient();
+        client.EnqueueStreaming("a", "b", "c");
+        var chain = Chain.Create(client).Prompt("hi").Build();
+        var context = chain.CreateContext();
+        using var cts = new CancellationTokenSource();
+
+        // Act
+        var received = new List<string>();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var update in chain.RunStreamingAsync(new { }, context, cts.Token))
+            {
+                if (update.IsStepComplete)
+                {
+                    continue;
+                }
+
+                received.Add(update.Text);
+                if (received.Count == 2)
+                {
+                    cts.Cancel();
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(ChatRole.User, context.Messages[0].Role);
+        Assert.Equal(ChatRole.Assistant, context.Messages[1].Role);
+        Assert.Equal("ab", context.Messages[1].Text);
+    }
+
+    [Fact]
     public async Task RunStreamingAsync_NonStreamableTerminalStep_YieldsSingleCompletionUpdate()
     {
         // Arrange
@@ -283,4 +410,10 @@ public class ChainTests
     }
 
     private sealed record CityFact(string City, int Population);
+
+    private sealed record CalculatorService
+    {
+        [System.ComponentModel.Description("Adds two numbers.")]
+        public int Add(int a, int b) => a + b;
+    }
 }

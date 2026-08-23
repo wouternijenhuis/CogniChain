@@ -63,16 +63,38 @@ public class RetryingChatClientTests
     }
 
     [Fact]
-    public async Task GetResponseAsync_OperationCanceled_PropagatesImmediatelyWithoutRetrying()
+    public async Task GetResponseAsync_CallerCancellation_PropagatesImmediatelyWithoutRetrying()
     {
-        // Arrange
+        // Arrange: cancellation actually requested via the caller's own token is never retried,
+        // regardless of what specific OperationCanceledException the inner client throws.
         var inner = new FakeChatClient();
         inner.EnqueueThrow(new OperationCanceledException());
         var client = new RetryingChatClient(inner, FastPolicy);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<OperationCanceledException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], cancellationToken: cts.Token));
         Assert.Equal(1, inner.CallCount);
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_OperationCanceledNotFromCallerToken_IsRetriedAsATimeout()
+    {
+        // Arrange: an OperationCanceledException that is NOT caused by the caller's own token — the
+        // shape of an internal timeout, e.g. HttpClient.Timeout — is treated as transient and retried,
+        // consistent with RetryPolicy already classifying TimeoutException as transient.
+        var inner = new FakeChatClient();
+        inner.EnqueueThrow(new OperationCanceledException("internal timeout"));
+        inner.EnqueueResponse("ok");
+        var client = new RetryingChatClient(inner, FastPolicy);
+
+        // Act
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
+
+        // Assert
+        Assert.Equal("ok", response.Text);
+        Assert.Equal(2, inner.CallCount);
     }
 
     [Fact]
@@ -112,6 +134,47 @@ public class RetryingChatClientTests
         // Assert
         Assert.Equal(["a", "b"], tokens);
         Assert.Equal(2, inner.StreamingCallCount);
+    }
+
+    [Fact]
+    public async Task GetStreamingResponseAsync_NonTransientFailureOnConnect_DisposesEnumeratorBeforePropagating()
+    {
+        // Arrange: regression test — a non-transient failure obtaining the first update must still
+        // dispose the enumerator before propagating, not just the transient-retry path.
+        var inner = new FakeChatClient();
+        inner.EnqueueStreamingThrow(new HttpRequestException("bad request", null, HttpStatusCode.BadRequest));
+        var client = new RetryingChatClient(inner, FastPolicy);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
+            {
+            }
+        });
+        Assert.Equal(1, inner.StreamingDisposeCount);
+    }
+
+    [Fact]
+    public async Task GetStreamingResponseAsync_AttemptsExhausted_DisposesEnumeratorBeforePropagating()
+    {
+        // Arrange: regression test — the final, non-retried attempt must still dispose its enumerator.
+        var inner = new FakeChatClient();
+        for (var i = 0; i < FastPolicy.MaxAttempts; i++)
+        {
+            inner.EnqueueStreamingThrow(new HttpRequestException("still busy", null, HttpStatusCode.ServiceUnavailable));
+        }
+
+        var client = new RetryingChatClient(inner, FastPolicy);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
+            {
+            }
+        });
+        Assert.Equal(FastPolicy.MaxAttempts, inner.StreamingDisposeCount);
     }
 
     [Fact]

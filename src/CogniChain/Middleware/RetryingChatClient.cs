@@ -9,8 +9,12 @@ namespace CogniChain.Middleware;
 /// An <see cref="IChatClient"/> middleware that retries transient failures with capped exponential
 /// backoff and full jitter. Unlike a naive <c>catch (Exception)</c> retry loop, this:
 /// <list type="bullet">
-/// <item>never retries <see cref="OperationCanceledException"/> — cancellation always propagates immediately;</item>
-/// <item>only retries exceptions <see cref="RetryPolicy.IsTransient"/> classifies as transient (by
+/// <item>never retries cancellation actually requested via the caller's own <see cref="CancellationToken"/>
+/// — that always propagates immediately;</item>
+/// <item>retries an <see cref="OperationCanceledException"/> whose token is <em>not</em> the caller's —
+/// almost always an internal timeout (e.g. <c>HttpClient.Timeout</c>) rather than real cancellation, and
+/// <see cref="RetryPolicy"/> already treats <see cref="TimeoutException"/> as transient;</item>
+/// <item>only retries other exceptions <see cref="RetryPolicy.IsTransient"/> classifies as transient (by
 /// default: 408/429/5xx-shaped exceptions, <see cref="TimeoutException"/>, <see cref="IOException"/>) —
 /// a 401 or a bad-request error fails on the first attempt;</item>
 /// <item>honors a server-specified retry delay when <see cref="RetryPolicy.RetryAfterSelector"/> finds one;</item>
@@ -49,9 +53,15 @@ public sealed class RetryingChatClient : DelegatingChatClient
             {
                 return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException ex) when (attempt < _policy.MaxAttempts)
+            {
+                var delay = ComputeDelay(ex, attempt);
+                _logger.LogWarning(ex, "CogniChain retry {Attempt}/{MaxAttempts} in {DelayMs}ms (timeout): {Message}", attempt, _policy.MaxAttempts, delay.TotalMilliseconds, ex.Message);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (attempt < _policy.MaxAttempts && _policy.IsTransient(ex))
             {
@@ -77,9 +87,17 @@ public sealed class RetryingChatClient : DelegatingChatClient
                 hasFirst = await enumerator.MoveNextAsync().ConfigureAwait(false);
                 connected = true;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                await enumerator.DisposeAsync().ConfigureAwait(false);
                 throw;
+            }
+            catch (OperationCanceledException ex) when (attempt < _policy.MaxAttempts)
+            {
+                await enumerator.DisposeAsync().ConfigureAwait(false);
+                var delay = ComputeDelay(ex, attempt);
+                _logger.LogWarning(ex, "CogniChain streaming retry {Attempt}/{MaxAttempts} in {DelayMs}ms (timeout): {Message}", attempt, _policy.MaxAttempts, delay.TotalMilliseconds, ex.Message);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (attempt < _policy.MaxAttempts && _policy.IsTransient(ex))
             {
@@ -87,6 +105,12 @@ public sealed class RetryingChatClient : DelegatingChatClient
                 var delay = ComputeDelay(ex, attempt);
                 _logger.LogWarning(ex, "CogniChain streaming retry {Attempt}/{MaxAttempts} in {DelayMs}ms: {Message}", attempt, _policy.MaxAttempts, delay.TotalMilliseconds, ex.Message);
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Non-transient, or attempts exhausted: dispose before letting the original exception propagate.
+                await enumerator.DisposeAsync().ConfigureAwait(false);
+                throw;
             }
         }
 

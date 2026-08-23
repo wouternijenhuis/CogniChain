@@ -118,8 +118,42 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
 
     async ValueTask<TOut> IChainStep<TIn, TOut>.ExecuteAsync(TIn input, ChainContext context, CancellationToken cancellationToken)
     {
-        var value = await ExecuteNodesAsync(input, context, cancellationToken).ConfigureAwait(false);
+        var nested = CreateNestedContext(context);
+        var value = await ExecuteNodesAsync(input, nested, cancellationToken).ConfigureAwait(false);
         return (TOut)value!;
+    }
+
+    /// <summary>
+    /// Builds the <see cref="ChainContext"/> this chain runs against when it's used as a nested step
+    /// (via <c>Branch</c> or <c>Then(IChainStep&lt;,&gt;)</c>): this chain's own chat client, tools,
+    /// option configuration, and reducer apply, while <see cref="ChainContext.Messages"/>,
+    /// <see cref="ChainContext.Items"/>, and <see cref="ChainContext.Usage"/> are shared with the
+    /// parent so history and usage flow across the nesting boundary. System messages configured on this
+    /// chain are added once, skipped if an identical one is already present (so re-entering the same
+    /// nested chain against the same parent context doesn't duplicate them).
+    /// </summary>
+    private ChainContext CreateNestedContext(ChainContext parent)
+    {
+        var options = parent.Options.Clone();
+        if (_tools.Count > 0)
+        {
+            options.Tools = [.. (options.Tools ?? []), .. _tools];
+        }
+
+        _configureOptions?.Invoke(options);
+
+        var nested = parent.CreateChild(_chatClient, options, _loggerFactory.CreateLogger($"CogniChain.Chain.{Name}"), _reducer ?? parent.Reducer);
+
+        foreach (var systemMessage in _systemMessages)
+        {
+            var alreadyPresent = nested.Messages.Any(m => m.Role == ChatRole.System && m.Text == systemMessage);
+            if (!alreadyPresent)
+            {
+                nested.Messages.Add(new ChatMessage(ChatRole.System, systemMessage));
+            }
+        }
+
+        return nested;
     }
 
     /// <summary>Runs the chain against a fresh, single-turn context, streaming updates as they arrive.</summary>
@@ -208,6 +242,12 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
         }
         catch (OperationCanceledException)
         {
+            throw;
+        }
+        catch (ChainStepException)
+        {
+            // Already carries a step name/index — e.g. from a nested chain's own InvokeNodeAsync
+            // (Branch, Then(IChainStep<,>)). Re-wrapping here would bury the real failing step.
             throw;
         }
         catch (Exception ex)

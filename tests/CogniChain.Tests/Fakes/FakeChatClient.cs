@@ -20,6 +20,12 @@ internal sealed class FakeChatClient : IChatClient
 
     public int StreamingCallCount { get; private set; }
 
+    /// <summary>
+    /// Counts how many times a streaming enumerator's cleanup ran (natural completion, explicit
+    /// disposal, or exception unwind) — used to assert callers dispose enumerators on every exit path.
+    /// </summary>
+    public int StreamingDisposeCount { get; private set; }
+
     public void EnqueueResponse(string text) =>
         _responses.Enqueue(() => new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
 
@@ -57,12 +63,21 @@ internal sealed class FakeChatClient : IChatClient
             throw new InvalidOperationException("FakeChatClient: no more scripted streaming responses were enqueued.");
         }
 
-        var updates = _streamingResponses.Dequeue()();
-        foreach (var update in updates)
+        var factory = _streamingResponses.Dequeue();
+
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await Task.Yield();
-            yield return update;
+            var updates = factory();
+            foreach (var update in updates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+                yield return update;
+            }
+        }
+        finally
+        {
+            StreamingDisposeCount++;
         }
     }
 

@@ -62,7 +62,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
             var options = configure is null ? context.Options : CloneOptions(context.Options, configure);
             var response = await context.ChatClient.GetResponseAsync<TOut>(context.Messages, options, useJsonSchemaResponseFormat: null, cancellationToken).ConfigureAwait(false);
 
-            context.Usage.Add(response.Usage ?? new UsageDetails());
+            context.AddUsage(response.Usage);
             context.Messages.AddMessages(response);
 
             return response.Result;
@@ -90,7 +90,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
             var options = configure is null ? context.Options : CloneOptions(context.Options, configure);
             var response = await context.ChatClient.GetResponseAsync(context.Messages, options, cancellationToken).ConfigureAwait(false);
 
-            context.Usage.Add(response.Usage ?? new UsageDetails());
+            context.AddUsage(response.Usage);
             context.Messages.AddMessages(response);
 
             return response.Text;
@@ -105,15 +105,26 @@ public sealed class ChainBuilder<TIn, TCurrent>
             var options = configure is null ? context.Options : CloneOptions(context.Options, configure);
             var updates = new List<ChatResponseUpdate>();
 
-            await foreach (var update in context.ChatClient.GetStreamingResponseAsync(context.Messages, options, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            // try/finally (not try/catch) so a partial response is still recorded into context.Messages
+            // if the caller cancels mid-stream or stops enumerating early — otherwise the user message
+            // added above is left dangling with no matching assistant reply.
+            try
             {
-                updates.Add(update);
-                yield return update;
+                await foreach (var update in context.ChatClient.GetStreamingResponseAsync(context.Messages, options, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+                {
+                    updates.Add(update);
+                    yield return update;
+                }
             }
-
-            var response = updates.ToChatResponse();
-            context.Usage.Add(response.Usage ?? new UsageDetails());
-            context.Messages.AddMessages(response);
+            finally
+            {
+                if (updates.Count > 0)
+                {
+                    var response = updates.ToChatResponse();
+                    context.AddUsage(response.Usage);
+                    context.Messages.AddMessages(response);
+                }
+            }
         }
 
         return Append<string>(new StepNode { Name = stepName, Invoke = Invoke, Stream = Stream });
@@ -202,8 +213,11 @@ public sealed class ChainBuilder<TIn, TCurrent>
 
     /// <summary>
     /// Adds a conditional step: evaluates <paramref name="predicate"/> against the current value and
-    /// runs <paramref name="whenTrue"/> or <paramref name="whenFalse"/> — both pre-built chains sharing
-    /// this chain's <see cref="ChainContext"/> — to produce the next value.
+    /// runs <paramref name="whenTrue"/> or <paramref name="whenFalse"/> — both pre-built chains — to
+    /// produce the next value. The chosen chain runs against its <em>own</em> configured chat client,
+    /// tools, option configuration, and reducer; only <see cref="ChainContext.Messages"/>,
+    /// <see cref="ChainContext.Items"/>, and <see cref="ChainContext.Usage"/> are shared with this
+    /// chain's context, so conversation history and accumulated usage flow across the branch.
     /// </summary>
     public ChainBuilder<TIn, TOut> Branch<TOut>(
         Func<TCurrent, bool> predicate,
@@ -226,15 +240,31 @@ public sealed class ChainBuilder<TIn, TCurrent>
     }
 
     /// <summary>Adds tools the model may call for every prompt step from here on.</summary>
+    /// <exception cref="InvalidOperationException">A tool with the same <see cref="AITool.Name"/> was already added.</exception>
     public ChainBuilder<TIn, TCurrent> WithTools(params AITool[] tools)
     {
         ArgumentNullException.ThrowIfNull(tools);
-        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, [.. _tools, .. tools], _configureOptions, _systemMessages, _reducer, _loggerFactory);
+
+        var combined = new List<AITool>(_tools);
+        foreach (var tool in tools)
+        {
+            if (combined.Any(t => string.Equals(t.Name, tool.Name, StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException($"A tool named '{tool.Name}' has already been added to this chain.");
+            }
+
+            combined.Add(tool);
+        }
+
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, combined, _configureOptions, _systemMessages, _reducer, _loggerFactory);
     }
 
     /// <summary>
     /// Reflects every public instance method of <paramref name="instance"/> into an <see cref="AIFunction"/>
     /// tool. Convenient for grouping related tools (e.g. a "calculator" or "weather" service) into one class.
+    /// Methods inherited from <see cref="object"/> and common compiler/record-synthesized members
+    /// (<c>ToString</c>, <c>Equals</c>, <c>GetHashCode</c>, <c>Deconstruct</c>, record <c>Clone</c>) are
+    /// excluded even when overridden, since they're never meant to be model-callable tools.
     /// </summary>
     [RequiresUnreferencedCode("Reflects over the public methods of an arbitrary type; ensure they're preserved when trimming, or use WithTools(AIFunctionFactory.Create(...)) instead.")]
     public ChainBuilder<TIn, TCurrent> WithToolsFrom(object instance)
@@ -243,12 +273,18 @@ public sealed class ChainBuilder<TIn, TCurrent>
 
         var tools = instance.GetType()
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(m => !m.IsSpecialName)
+            .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object) && !IsSynthesizedMember(m))
             .Select(m => AIFunctionFactory.Create(m, instance, options: null))
             .ToArray();
 
         return WithTools(tools);
     }
+
+    private static bool IsSynthesizedMember(MethodInfo method) => method.Name switch
+    {
+        nameof(ToString) or nameof(Equals) or nameof(GetHashCode) or nameof(GetType) or "Deconstruct" or "PrintMembers" => true,
+        _ => method.Name.StartsWith('<'), // e.g. record-synthesized "<Clone>$"
+    };
 
     /// <summary>Adds a callback that configures <see cref="ChatOptions"/> for every prompt step from here on.</summary>
     public ChainBuilder<TIn, TCurrent> WithOptions(Action<ChatOptions> configure)

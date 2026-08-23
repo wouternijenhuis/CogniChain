@@ -48,9 +48,9 @@ last step added, and becomes the input type of the next.
 | `Then<TOut>(Func<TCurrent, TOut> step, string? name = null)` | `ChainBuilder<TIn, TOut>` | Synchronous convenience overload. |
 | `Then<TOut>(IChainStep<TCurrent, TOut> step)` | `ChainBuilder<TIn, TOut>` | Reusable, testable step type. |
 | `Map<TElement, TOut>(Func<TElement, ChainContext, CancellationToken, ValueTask<TOut>> step, int maxConcurrency = 4, string? name = null)` | `ChainBuilder<TIn, IReadOnlyList<TOut>>` | Fan-out; the current value must be `IEnumerable<TElement>` at run time. |
-| `Branch<TOut>(Func<TCurrent, bool> predicate, Chain<TCurrent, TOut> whenTrue, Chain<TCurrent, TOut> whenFalse, string? name = null)` | `ChainBuilder<TIn, TOut>` | Both branches are pre-built chains sharing the parent's `ChainContext`. |
-| `WithTools(params AITool[] tools)` | same builder | Adds to `ChatOptions.Tools` for every prompt step from here on. |
-| `WithToolsFrom(object instance)` | same builder | Reflects `instance`'s public methods into `AIFunction`s. |
+| `Branch<TOut>(Func<TCurrent, bool> predicate, Chain<TCurrent, TOut> whenTrue, Chain<TCurrent, TOut> whenFalse, string? name = null)` | `ChainBuilder<TIn, TOut>` | The chosen branch runs against its *own* chat client, tools, and system messages, sharing only `Messages`/`Items`/`Usage` with the parent's `ChainContext`. |
+| `WithTools(params AITool[] tools)` | same builder | Adds to `ChatOptions.Tools` for every prompt step from here on. Throws `InvalidOperationException` on a duplicate tool name. |
+| `WithToolsFrom(object instance)` | same builder | Reflects `instance`'s public methods into `AIFunction`s, excluding `object`/record-synthesized members (`ToString`, `Equals`, `GetHashCode`, `Deconstruct`, ...). |
 | `WithOptions(Action<ChatOptions> configure)` | same builder | Composes with any prior `WithOptions` call. |
 | `WithSystemMessage(string content)` | same builder | Seeded into every fresh `ChainContext` this chain creates. |
 | `WithHistoryReducer(IChatReducer reducer)` | same builder | Default: no reduction (unbounded history). |
@@ -77,14 +77,15 @@ Per-run state, created by `Chain.CreateContext()` and threaded through every ste
 | Member | Type | Notes |
 |---|---|---|
 | `ChatClient` | `IChatClient` | |
-| `Messages` | `IList<ChatMessage>` | Reused across `RunAsync` calls to build multi-turn conversations. |
+| `Messages` | `IList<ChatMessage>` | Reused across `RunAsync` calls to build multi-turn conversations. Not safe for concurrent mutation (e.g. from inside `Map`). |
 | `Options` | `ChatOptions` | Includes any tools/config from `WithTools`/`WithOptions`. |
 | `Services` | `IServiceProvider` | Whatever was passed to `CreateContext`, or an empty provider. |
-| `Items` | `IDictionary<string, object?>` | Free-form bag for passing state between steps; surfaced on `ChainResult.Items`. |
+| `Items` | `IDictionary<string, object?>` | Free-form bag for passing state between steps; surfaced on `ChainResult.Items`. Backed by `ConcurrentDictionary`, safe for concurrent `Map` invocations. |
 | `Usage` | `UsageDetails` | Accumulated across every model call in the run. |
 | `Logger` | `ILogger` | |
 | `Reducer` | `IChatReducer?` | From `WithHistoryReducer`, or `null`. |
 | `ReduceHistoryAsync(CancellationToken ct = default)` | `ValueTask` | Applies `Reducer` to `Messages`; called automatically before every model call inside a prompt step. |
+| `AddUsage(UsageDetails? usage)` | `void` | Adds into `Usage` under a lock; prefer this over mutating `Usage` directly from a step that might run concurrently with others. |
 
 ## `ChainResult<T>` / `ChainUpdate`
 
@@ -136,7 +137,10 @@ template (an unmatched `{`) throws immediately rather than on first render.
 
 ## `ChainStepException`
 
-Thrown when any step fails (except `OperationCanceledException`, which always propagates unwrapped).
+Thrown when any step fails (except an `OperationCanceledException`, which always propagates
+unwrapped). If the step is itself a nested chain (`Branch`, `Then(IChainStep<,>)`), the exception isn't
+re-wrapped a second time — `StepName`/`StepIndex`/`InnerException` identify the actual step that
+failed, inside the nested chain, not the outer `Branch`/`Then` step that invoked it.
 
 ```csharp
 public sealed class ChainStepException : Exception
@@ -153,8 +157,10 @@ public sealed class ChainStepException : Exception
 public sealed class MessageCountReducer(int maxMessages) : IChatReducer
 ```
 
-Keeps the most recent `maxMessages` non-system messages; system messages are always preserved. The
-default reducer when you opt into history reduction. For LLM-summarized trimming instead, use the
+Keeps the most recent `maxMessages` non-system messages, in their original relative order; system
+messages are always preserved, wherever they appear. The cut point is extended backward as needed so
+it never separates a `ChatRole.Tool` result from the assistant message that requested it. The default
+reducer when you opt into history reduction. For LLM-summarized trimming instead, use the
 (experimental) `SummarizingChatReducer` from `Microsoft.Extensions.AI` via `WithHistoryReducer`.
 
 ## `CogniChain.Middleware`
@@ -162,7 +168,7 @@ default reducer when you opt into history reduction. For LLM-summarized trimming
 | Type | Purpose |
 |---|---|
 | `RetryPolicy` | `MaxAttempts`, `InitialDelay`, `BackoffMultiplier`, `MaxDelay`, `UseJitter`, `IsTransient`, `RetryAfterSelector`. `RetryPolicy.Default`: 3 attempts, 1s → 30s capped backoff, full jitter. |
-| `RetryingChatClient : DelegatingChatClient` | Retries `RetryPolicy.IsTransient`-classified failures; never retries `OperationCanceledException`; for streaming, only the first update is retried. |
+| `RetryingChatClient : DelegatingChatClient` | Retries `RetryPolicy.IsTransient`-classified failures; never retries cancellation actually requested via the caller's own token, but *does* retry an `OperationCanceledException` from any other source (e.g. an internal `HttpClient.Timeout`) as if it were a `TimeoutException`. For streaming, only obtaining the first update is retried; the enumerator is disposed on every exit path. |
 | `RetryingChatClientBuilderExtensions.UseCogniChainRetry(...)` | `ChatClientBuilder` extension to add the above to a pipeline. |
 
 ## `CogniChain.DependencyInjection`
