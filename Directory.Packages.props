@@ -14,7 +14,7 @@
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
 
     <!-- Microsoft Agent Framework - CogniChain.Agents bridge -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.20.0" />
 
     <!-- Model Context Protocol - example tool sourcing -->
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
