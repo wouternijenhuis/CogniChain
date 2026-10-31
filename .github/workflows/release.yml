@@ -15,9 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Must match the Environment set on the nuget.org Trusted Publishing policy.
+    environment: production
+
     permissions:
       contents: write  # Required for creating releases
       packages: write  # Required for publishing packages
+      id-token: write  # Required for NuGet Trusted Publishing (OIDC token issuance)
 
     steps:
       - name: Checkout code
@@ -118,13 +122,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Exchanges this job's GitHub OIDC token for a short-lived nuget.org API key, via the
+      # Trusted Publishing policy registered on nuget.org. The key is valid for 1 hour, so this
+      # step is deliberately placed immediately before the push.
+      - name: NuGet login (OIDC → short-lived API key)
+        id: nuget_login
+        if: ${{ !contains(steps.version.outputs.version, '-') }}
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Publish to NuGet.org
         if: ${{ !contains(steps.version.outputs.version, '-') }}  # Only publish stable releases
         run: |
           for package in ./artifacts/*.nupkg; do
             echo "Pushing $package..."
             dotnet nuget push "$package" \
-              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} \
               --source https://api.nuget.org/v3/index.json \
               --skip-duplicate
           done
