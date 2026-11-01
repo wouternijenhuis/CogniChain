@@ -17,7 +17,7 @@
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
 
     <!-- Model Context Protocol - example tool sourcing -->
-    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
 
     <!-- Provider SDKs (examples only) -->
     <!-- OpenAI is pinned to the version Microsoft.Extensions.AI.OpenAI 10.11.0 declares a dependency on. -->
