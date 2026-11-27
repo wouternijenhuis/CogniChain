@@ -82,7 +82,8 @@ provider's `HttpClient` instead; the two compose without conflict.
 
 **Don't stack retries.** The OpenAI and Azure OpenAI SDKs already retry 429/5xx responses by default
 (their client pipeline's own retry policy). Adding `.UseCogniChainRetry()` on top multiplies attempts
-(3 × 3 = up to 9 requests per call) and stretches worst-case latency. Pick one layer: either lower or
+(every CogniChain attempt can itself be retried inside the SDK, so the worst case is CogniChain's
+`MaxAttempts` times the SDK's own attempts per call) and stretches worst-case latency. Pick one layer: either lower or
 disable the SDK's retries (e.g. `OpenAIClientOptions.RetryPolicy`) and use `UseCogniChainRetry()` for
 uniform behavior across providers, or keep the SDK's and leave CogniChain's off.
 
