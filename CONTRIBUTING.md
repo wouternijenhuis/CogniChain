@@ -17,8 +17,9 @@ version. Check existing issues first.
 
 ## Development setup
 
-Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (the version pinned in
-`global.json`), a code editor, Git.
+Prerequisites: [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (the version pinned in
+`global.json`) plus the .NET 10 runtime, since the libraries and tests target both `net10.0` and `net11.0`;
+a code editor; Git.
 
 ```bash
 git clone https://github.com/wouternijenhuis/CogniChain.git

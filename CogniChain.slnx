@@ -13,6 +13,9 @@
   <Folder Name="/tests/CogniChain.Tests/">
     <Project Path="tests/CogniChain.Tests/CogniChain.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/CogniChain.Agents.Tests/">
+    <Project Path="tests/CogniChain.Agents.Tests/CogniChain.Agents.Tests.csproj" />
+  </Folder>
   <Folder Name="/examples/CogniChain.Examples.Shared/">
     <Project Path="examples/CogniChain.Examples.Shared/CogniChain.Examples.Shared.csproj" />
   </Folder>

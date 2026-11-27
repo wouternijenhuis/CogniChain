@@ -54,6 +54,7 @@ last step added, and becomes the input type of the next.
 | `WithOptions(Action<ChatOptions> configure)` | same builder | Composes with any prior `WithOptions` call. |
 | `WithSystemMessage(string content)` | same builder | Seeded into every fresh `ChainContext` this chain creates. |
 | `WithHistoryReducer(IChatReducer reducer)` | same builder | Default: no reduction (unbounded history). |
+| `WithJsonSerializerOptions(JsonSerializerOptions options)` | same builder | Used by `Prompt<T>` steps added after this call for schema generation and deserialization. Pass a source-generated context's options for trimming/AOT. Default: `AIJsonUtilities.DefaultOptions`. |
 | `Build(string? name = null)` | `Chain<TIn, TCurrent>` | |
 
 ## `Chain<TIn, TOut>`
@@ -187,11 +188,15 @@ public static class ChainActivitySource
 {
     public const string Name = "CogniChain";
     public static readonly ActivitySource Instance;
+    public static Activity? StartChain(string chainName);
+    public static Activity? StartStep(string chainName, string stepName, int stepIndex);
 }
 ```
 
-One `Activity` per chain step, with `cognichain.chain.name`, `cognichain.step.name`, and
-`cognichain.step.index` tags. Point your OTel exporter at `ChainActivitySource.Name` alongside
+One `cognichain.chain <name>` activity per run (tag `cognichain.chain.name`), with one
+`cognichain.step <step>` child per step (tags `cognichain.chain.name`, `cognichain.step.name`,
+`cognichain.step.index`). Failures set `ActivityStatusCode.Error`, an `error.type` tag, and an
+`exception` event on both the step and the chain activity. Point your OTel exporter at `ChainActivitySource.Name` alongside
 `.UseOpenTelemetry()` on the chat client for full request + step tracing.
 
 ## `CogniChain.Agents` (optional package)
@@ -201,7 +206,9 @@ public static AIAgent AsAIAgent(this Chain<string, string> chain, string name, s
 public static IChainStep<string, string> AsChainStep(this AIAgent agent);
 ```
 
-Bridges to the Microsoft Agent Framework. See
+Bridges to the Microsoft Agent Framework. A chain wrapped with `AsAIAgent` streams tokens when its
+last step is a plain-text `.Prompt()`; any other last step is emitted as a single update once the chain
+finishes. `AsChainStep` adds the agent's token usage to the chain's `Usage`. See
 [`examples/CogniChain.Examples.AgentFramework`](../examples/CogniChain.Examples.AgentFramework).
 
 ## `ChainAIFunctionExtensions` (core package)

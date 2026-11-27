@@ -27,13 +27,27 @@ internal sealed class ChainChatClient(Chain<string, string> chain) : IChatClient
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (!_chain.IsTerminalStepStreamable)
+        {
+            // Only a plain-text Prompt step streams tokens; any other terminal step (Then, Map, Branch,
+            // Prompt<T>) produces its value as a whole, so run the chain once and surface that value.
+            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            foreach (var update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+
+            yield break;
+        }
+
         var input = LastUserText(messages);
 
         await foreach (var update in _chain.RunStreamingAsync(input, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            if (update.Text.Length > 0)
+            // Forward the model's own update unchanged, so usage, message IDs, and finish reasons reach the agent.
+            if (update.ChatUpdate is { } chatUpdate)
             {
-                yield return new ChatResponseUpdate(ChatRole.Assistant, update.Text);
+                yield return chatUpdate;
             }
         }
     }

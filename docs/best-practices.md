@@ -17,6 +17,18 @@ var chain = Chain.Create(chatClient).Prompt("Classify as positive/negative: {tex
 var isPositive = result.Value.Contains("positive", StringComparison.OrdinalIgnoreCase);
 ```
 
+### Trimming and Native AOT
+
+`PromptTemplate.Render(object)` (used by `.Prompt()`/`.Prompt<T>()` when the input is a POCO or
+anonymous object) reads properties by reflection, and `.Prompt<T>()` builds its JSON schema from
+`AIJsonUtilities.DefaultOptions` unless told otherwise. For trimmed or AOT apps:
+
+- pass a source-generated context with `.WithJsonSerializerOptions(MyJsonContext.Default.Options)`
+  before your `.Prompt<T>()` steps, so schema generation and deserialization never reflect;
+- feed prompt steps a `Dictionary<string, object?>` or `IReadOnlyDictionary<string, string?>` (e.g. built
+  in a preceding `.Then`) rather than an anonymous object — dictionaries are read by key, not reflected;
+- prefer `WithTools(AIFunctionFactory.Create(...))` over `WithToolsFrom(instance)`.
+
 ## Conversation history
 
 Reuse a `ChainContext` across `RunAsync` calls for multi-turn conversations — a fresh context per call
@@ -68,6 +80,12 @@ immediately, not after three slow attempts). For HTTP-level policies beyond the 
 connection pooling, circuit breakers — layer `Microsoft.Extensions.Http.Resilience` underneath the
 provider's `HttpClient` instead; the two compose without conflict.
 
+**Don't stack retries.** The OpenAI and Azure OpenAI SDKs already retry 429/5xx responses by default
+(their client pipeline's own retry policy). Adding `.UseCogniChainRetry()` on top multiplies attempts
+(3 × 3 = up to 9 requests per call) and stretches worst-case latency. Pick one layer: either lower or
+disable the SDK's retries (e.g. `OpenAIClientOptions.RetryPolicy`) and use `UseCogniChainRetry()` for
+uniform behavior across providers, or keep the SDK's and leave CogniChain's off.
+
 ## Telemetry
 
 ```csharp
@@ -76,8 +94,12 @@ var chatClient = baseClient.AsBuilder()
     .Build();
 ```
 
-Chain-level spans (one per step, tagged with chain and step name) come from `ChainActivitySource.Instance`
-automatically — no opt-in needed, only an exporter listening on `ChainActivitySource.Name` ("CogniChain").
+Chain-level spans come from `ChainActivitySource.Instance` automatically — no opt-in needed, only an
+exporter listening on `ChainActivitySource.Name` ("CogniChain"). Each run produces a
+`cognichain.chain <name>` span with one `cognichain.step <step>` child per step; the `UseOpenTelemetry()`
+spans for the actual model calls nest beneath the step that made them. Failed steps carry an error status,
+an `error.type` tag, and an `exception` event. Token usage stays on the model-call spans only, so
+dashboards don't count it twice.
 Read `ChainResult.Usage` after any run for accumulated token counts, or inspect `ChainContext.Usage`
 mid-chain in a `.Then` step.
 
@@ -112,7 +134,7 @@ For structured output, enqueue a response whose text is valid JSON matching your
 
 ## Production checklist
 
-- [ ] `.UseCogniChainRetry()` (or an equivalent policy) in the chat client pipeline.
+- [ ] Exactly one retry layer: `.UseCogniChainRetry()` *or* the provider SDK's built-in retries, not both.
 - [ ] `.UseFunctionInvocation()` present if any chain uses tools.
 - [ ] A history reducer on any chain whose `ChainContext` is reused across many turns.
 - [ ] `.UseOpenTelemetry()` plus an exporter listening on `ChainActivitySource.Name`.

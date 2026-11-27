@@ -70,12 +70,22 @@ public sealed class PromptTemplate
     /// <summary>
     /// Renders the template, reading placeholder values from the public readable properties of
     /// <paramref name="values"/> (an anonymous object, record, or POCO). Property accessors are
-    /// cached per type.
+    /// cached per type. A dictionary keyed by placeholder name (<c>IReadOnlyDictionary&lt;string, string?&gt;</c>
+    /// or any <c>IEnumerable&lt;KeyValuePair&lt;string, object?&gt;&gt;</c>, such as
+    /// <c>Dictionary&lt;string, object?&gt;</c>) is read by key instead, without reflection.
     /// </summary>
     [RequiresUnreferencedCode("Reflects over the public properties of an arbitrary object; ensure they're preserved when trimming, or use Render(IReadOnlyDictionary<string, string?>) instead.")]
     public string Render(object values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
+        switch (values)
+        {
+            case IReadOnlyDictionary<string, string?> stringValues:
+                return Render(stringValues);
+            case IEnumerable<KeyValuePair<string, object?>> objectValues:
+                return Render(objectValues.ToDictionary(pair => pair.Key, pair => pair.Value?.ToString(), StringComparer.Ordinal));
+        }
 
         var properties = PropertyCache.GetOrAdd(values.GetType(), static t =>
             t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanRead && p.GetIndexParameters().Length == 0).ToArray());
