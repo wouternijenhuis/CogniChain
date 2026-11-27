@@ -23,6 +23,17 @@ it; `Chain<TIn, TOut>` and `ChainBuilder<TIn, TCurrent>` are the only things it 
 is a separate, optional package for the layer above, when a chain needs to participate in Agent
 Framework orchestration.
 
+## Positioning (late 2026)
+
+The .NET AI stack has filled in around CogniChain since 0.1: Agent Framework Workflows cover graph
+orchestration, checkpointing, and human-in-the-loop; `Microsoft.Extensions.AI` covers structured output,
+function invocation, reducers, and telemetry. CogniChain deliberately doesn't compete with either. What
+it still adds is a **compiler-checked, linear, in-process pipeline** — `Prompt<T>` → `Then` → `Map` →
+`Branch` with no workflow runtime, serialization boundary, or graph definition. Think of it as typed glue
+that runs *below or inside* a Workflow (via `CogniChain.Agents`), not as an orchestrator. When you need
+durable state, fan-in across agents, or human approval steps, reach for Agent Framework Workflows and drop
+chains into them as agents or steps.
+
 ## Request flow
 
 A `.Prompt<T>()` or `.Prompt()` step, at run time:
@@ -65,6 +76,14 @@ awaited as a whole.
 - **Reflection is opt-in and explicit.** `PromptTemplate.Render(object)` and `WithToolsFrom` are the
   only reflection-based APIs, and both are marked `[RequiresUnreferencedCode]` for trimmed/AOT
   consumers; every other API is fully static.
+
+## Telemetry shape
+
+Each run opens a `cognichain.chain <name>` activity; every step opens a `cognichain.step <step>` child
+under it (passed explicitly as the parent, because a streaming run's async iterator resumes on the
+consumer's execution context). Model-call spans from `UseOpenTelemetry()` nest under the step that made
+them, and carry the `gen_ai.*` attributes and token usage — CogniChain's spans intentionally don't
+repeat them.
 
 ## Error handling
 

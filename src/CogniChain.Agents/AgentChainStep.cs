@@ -10,6 +10,7 @@ internal sealed class AgentChainStep(AIAgent agent) : IChainStep<string, string>
     public async ValueTask<string> ExecuteAsync(string input, ChainContext context, CancellationToken cancellationToken = default)
     {
         var response = await _agent.RunAsync(input, session: null, options: null, cancellationToken).ConfigureAwait(false);
+        context.AddUsage(response.Usage);
         return response.Text;
     }
 }

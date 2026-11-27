@@ -132,4 +132,33 @@ public class PromptTemplateTests
         // Assert
         Assert.Equal(expected, result);
     }
+
+    [Fact]
+    public void RenderObject_WithObjectDictionary_ReadsValuesByKey()
+    {
+        // Arrange
+        var template = new PromptTemplate("{city} has {count} bridges");
+        object values = new Dictionary<string, object?> { ["city"] = "Amsterdam", ["count"] = 1281 };
+
+        // Act
+        var result = template.Render(values);
+
+        // Assert
+        Assert.Equal("Amsterdam has 1281 bridges", result);
+    }
+
+    [Fact]
+    public async Task PromptStep_WithStringDictionaryInput_RendersByKey()
+    {
+        // Arrange
+        var client = new Fakes.FakeChatClient();
+        client.EnqueueResponse("ok");
+        var chain = Chain.Create<IReadOnlyDictionary<string, string?>>(client).Prompt("Topic: {topic}").Build();
+
+        // Act
+        await chain.RunAsync(new Dictionary<string, string?> { ["topic"] = "dikes" });
+
+        // Assert
+        Assert.Equal("Topic: dikes", client.Requests[0][^1].Text);
+    }
 }

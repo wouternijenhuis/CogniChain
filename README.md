@@ -26,7 +26,7 @@ dotnet add package CogniChain
 dotnet add package CogniChain.Agents   # optional: Microsoft Agent Framework bridge
 ```
 
-**Requirements:** .NET 10.0+, and any `IChatClient` — OpenAI, Azure OpenAI, or anything else `Microsoft.Extensions.AI` supports.
+**Requirements:** .NET 10 (LTS) or .NET 11 — the packages ship builds for both — and any `IChatClient` — OpenAI, Azure OpenAI, or anything else `Microsoft.Extensions.AI` supports.
 
 ## Quick start
 

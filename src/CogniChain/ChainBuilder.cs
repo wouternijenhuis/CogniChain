@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +24,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
     private readonly IReadOnlyList<string> _systemMessages;
     private readonly IChatReducer? _reducer;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly JsonSerializerOptions? _jsonSerializerOptions;
 
     internal ChainBuilder(
         IChatClient chatClient,
@@ -31,7 +33,8 @@ public sealed class ChainBuilder<TIn, TCurrent>
         Action<ChatOptions>? configureOptions,
         IReadOnlyList<string> systemMessages,
         IChatReducer? reducer,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        JsonSerializerOptions? jsonSerializerOptions = null)
     {
         _chatClient = chatClient;
         _nodes = nodes;
@@ -40,6 +43,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
         _systemMessages = systemMessages;
         _reducer = reducer;
         _loggerFactory = loggerFactory;
+        _jsonSerializerOptions = jsonSerializerOptions;
     }
 
     /// <summary>
@@ -47,11 +51,13 @@ public sealed class ChainBuilder<TIn, TCurrent>
     /// value's public properties, sends it to the model, and deserializes the response as
     /// <typeparamref name="TOut"/> via JSON schema. Does not support token streaming — see
     /// <see cref="Prompt(string, Action{ChatOptions}?, string?)"/> for a streamable plain-text step.
+    /// Uses the options from <see cref="WithJsonSerializerOptions"/> if that was called earlier on this builder.
     /// </summary>
     public ChainBuilder<TIn, TOut> Prompt<TOut>(string template, Action<ChatOptions>? configure = null, string? name = null)
     {
         var parsed = new PromptTemplate(template);
         var stepName = name ?? $"Prompt<{typeof(TOut).Name}>";
+        var serializerOptions = _jsonSerializerOptions;
 
         async ValueTask<object?> Invoke(object? current, ChainContext context, CancellationToken cancellationToken)
         {
@@ -60,7 +66,9 @@ public sealed class ChainBuilder<TIn, TCurrent>
             await context.ReduceHistoryAsync(cancellationToken).ConfigureAwait(false);
 
             var options = configure is null ? context.Options : CloneOptions(context.Options, configure);
-            var response = await context.ChatClient.GetResponseAsync<TOut>(context.Messages, options, useJsonSchemaResponseFormat: null, cancellationToken).ConfigureAwait(false);
+            var response = serializerOptions is null
+                ? await context.ChatClient.GetResponseAsync<TOut>(context.Messages, options, useJsonSchemaResponseFormat: null, cancellationToken).ConfigureAwait(false)
+                : await context.ChatClient.GetResponseAsync<TOut>(context.Messages, serializerOptions, options, useJsonSchemaResponseFormat: null, cancellationToken).ConfigureAwait(false);
 
             context.AddUsage(response.Usage);
             context.Messages.AddMessages(response);
@@ -162,8 +170,9 @@ public sealed class ChainBuilder<TIn, TCurrent>
     /// </summary>
     /// <remarks>
     /// Invocations run concurrently against the shared <see cref="ChainContext"/>. Keep
-    /// <paramref name="step"/> free of side effects on <see cref="ChainContext.Messages"/> or
-    /// <see cref="ChainContext.Items"/> — those members are not safe for concurrent mutation. Reading
+    /// <paramref name="step"/> free of side effects on <see cref="ChainContext.Messages"/>, which is not
+    /// safe for concurrent mutation; <see cref="ChainContext.Items"/> and <see cref="ChainContext.AddUsage"/>
+    /// are. Reading
     /// <see cref="ChainContext.ChatClient"/> to make independent, per-element model calls is safe:
     /// <c>IChatClient</c> implementations are documented as thread-safe for concurrent use.
     /// </remarks>
@@ -256,7 +265,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
             combined.Add(tool);
         }
 
-        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, combined, _configureOptions, _systemMessages, _reducer, _loggerFactory);
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, combined, _configureOptions, _systemMessages, _reducer, _loggerFactory, _jsonSerializerOptions);
     }
 
     /// <summary>
@@ -298,14 +307,14 @@ public sealed class ChainBuilder<TIn, TCurrent>
             configure(options);
         }
 
-        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, Combined, _systemMessages, _reducer, _loggerFactory);
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, Combined, _systemMessages, _reducer, _loggerFactory, _jsonSerializerOptions);
     }
 
     /// <summary>Adds a system message, seeded into every fresh <see cref="ChainContext"/> this chain creates.</summary>
     public ChainBuilder<TIn, TCurrent> WithSystemMessage(string content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(content);
-        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, _configureOptions, [.. _systemMessages, content], _reducer, _loggerFactory);
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, _configureOptions, [.. _systemMessages, content], _reducer, _loggerFactory, _jsonSerializerOptions);
     }
 
     /// <summary>
@@ -316,7 +325,20 @@ public sealed class ChainBuilder<TIn, TCurrent>
     public ChainBuilder<TIn, TCurrent> WithHistoryReducer(IChatReducer reducer)
     {
         ArgumentNullException.ThrowIfNull(reducer);
-        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, _configureOptions, _systemMessages, reducer, _loggerFactory);
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, _configureOptions, _systemMessages, reducer, _loggerFactory, _jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Sets the <see cref="JsonSerializerOptions"/> that <c>.Prompt&lt;T&gt;</c> steps added after this call
+    /// use to generate the response schema and deserialize the model's answer. Pass options backed by a
+    /// source-generated <c>JsonSerializerContext</c> (e.g. <c>MyJsonContext.Default.Options</c>) to keep
+    /// structured output working under trimming and Native AOT. Defaults to
+    /// <c>AIJsonUtilities.DefaultOptions</c> if never called.
+    /// </summary>
+    public ChainBuilder<TIn, TCurrent> WithJsonSerializerOptions(JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return new ChainBuilder<TIn, TCurrent>(_chatClient, _nodes, _tools, _configureOptions, _systemMessages, _reducer, _loggerFactory, options);
     }
 
     /// <summary>Builds the immutable, reusable <see cref="Chain{TIn, TOut}"/>.</summary>
@@ -324,7 +346,7 @@ public sealed class ChainBuilder<TIn, TCurrent>
         new(name ?? "Chain", _chatClient, _nodes, _tools, _configureOptions, _systemMessages, _reducer, _loggerFactory);
 
     private ChainBuilder<TIn, TNext> Append<TNext>(StepNode node) =>
-        new(_chatClient, [.. _nodes, node], _tools, _configureOptions, _systemMessages, _reducer, _loggerFactory);
+        new(_chatClient, [.. _nodes, node], _tools, _configureOptions, _systemMessages, _reducer, _loggerFactory, _jsonSerializerOptions);
 
     private static ChatOptions CloneOptions(ChatOptions options, Action<ChatOptions> configure)
     {

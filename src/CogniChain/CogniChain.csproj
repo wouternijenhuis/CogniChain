@@ -5,6 +5,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>0.3.0</PackageValidationBaselineVersion>
     <!--
       Not marked IsTrimmable: PromptTemplate.Render(object) and ChainBuilder.WithToolsFrom reflect over
       arbitrary user types by design (rendering a template against a POCO's properties; wrapping a
@@ -15,7 +16,7 @@
 
     <!-- Package identity -->
     <PackageId>CogniChain</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Wouter Nijenhuis (DevDad.net)</Authors>
     <Company>Wouter Nijenhuis (DevDad.net)</Company>
     <Copyright>Copyright © 2026 Wouter Nijenhuis — DevDad.net</Copyright>

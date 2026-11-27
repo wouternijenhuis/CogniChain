@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
+Dependency refresh onto the .NET 11 / `Microsoft.Extensions.AI` 11 wave, plus fixes and additive
+improvements from a design review. No public API was removed or changed (package validation runs against
+0.3.0).
+
+### Added
+
+- Builds for both `net10.0` (LTS) and `net11.0` in each package.
+- `ChainBuilder.WithJsonSerializerOptions(JsonSerializerOptions)`: `Prompt<T>` steps can use a
+  source-generated `JsonSerializerContext` for schema generation and deserialization, so structured output
+  works under trimming and Native AOT.
+- `PromptTemplate.Render(object)` (and therefore every prompt step) reads dictionary inputs —
+  `IReadOnlyDictionary<string, string?>` or `Dictionary<string, object?>` — by key, without reflection.
+- Telemetry: each run now emits a `cognichain.chain <name>` span with the step spans as its children,
+  for both `RunAsync` and `RunStreamingAsync`. Failures record `error.type` and an `exception` event.
+  New public method `ChainActivitySource.StartChain`.
+- `Chain<TIn, TOut>.SupportsTokenStreaming`: tells you whether `RunStreamingAsync` will stream model tokens
+  (it does only when the last step is a plain-text `Prompt`).
+- First test suite for `CogniChain.Agents`, plus tests for `AddChain`, `AsAIFunction`, history reducers
+  inherited by `Branch`, the new telemetry spans, and the new JSON options.
+
+### Fixed
+
+- `CogniChain.Agents`: `AsChainStep()` dropped the agent's token usage; it's now added to the chain's
+  `Usage`.
+- `CogniChain.Agents`: a chain exposed through `AsAIAgent()` streamed no text when its last step wasn't a
+  plain-text `Prompt` (e.g. `Then`, `Map`, `Prompt<T>`). The chain's output is now emitted. Streamed
+  updates are also forwarded unchanged, so usage, message IDs, and finish reasons reach the agent.
+- The `ChainActivitySource` docs claimed `gen_ai.*` tags that were never set. The docs now describe
+  the spans as they are. Model-level attributes stay on `UseOpenTelemetry()` spans so token usage
+  isn't counted twice.
+- Contradictory docs on whether `ChainContext.Items` is safe for concurrent `Map` steps (it is).
+
+### Changed
+
+- Behavior change: a dictionary passed to a prompt step (or to `PromptTemplate.Render(object)`) is now
+  read by key. Before, it was reflected like any other object, exposing only `Count`, `Keys` and similar
+  properties as placeholders. This applies to `IReadOnlyDictionary<string, string?>` and
+  `IEnumerable<KeyValuePair<string, object?>>` (so `Dictionary<string, string>` and
+  `Dictionary<string, object?>`). A dictionary with other value types, e.g. `Dictionary<string, int>`,
+  is still reflected.
+- `Microsoft.Extensions.AI` 10.11.0 → 11.0.1, `Microsoft.Agents.AI` 1.19.0 → 1.28.0,
+  `ModelContextProtocol` 2.2.0 → 2.4.0, `OpenAI` 2.14.0 → 2.15.0, `Microsoft.Extensions.*` → 11.0.x,
+  `xunit.v3` → 4.0.3; SDK pinned to 11.0.100.
+- Docs: a "Positioning" section in the architecture guide (typed glue below or inside Agent Framework
+  Workflows, not an orchestrator), a trimming/AOT guide, and a warning against stacking
+  `UseCogniChainRetry()` on top of the provider SDK's built-in retries.
+- Dependabot groups packages that pin each other transitively, so a single bump no longer fails with
+  NU1109.
+
+### Removed
+
+- The unused `Microsoft.Extensions.Http.Resilience` central package version (no project referenced it).
+
 ## [0.3.0] - 2026-08-23
 
 A full rebuild on [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)'s
@@ -154,7 +209,8 @@ headline features (conversation memory, tool calling, real streaming) never full
 
 ---
 
-[Unreleased]: https://github.com/wouternijenhuis/CogniChain/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/wouternijenhuis/CogniChain/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/wouternijenhuis/CogniChain/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wouternijenhuis/CogniChain/compare/v0.1.0...v0.2.0

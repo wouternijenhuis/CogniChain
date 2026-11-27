@@ -49,6 +49,13 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
     /// <summary>Gets the chain's name, used in telemetry and in <see cref="ChainStepException"/>.</summary>
     public string Name { get; }
 
+    /// <summary>
+    /// Gets whether <c>RunStreamingAsync</c> streams model tokens: <see langword="true"/> when the chain's
+    /// last step is a plain-text <c>.Prompt(string)</c>. Otherwise the run yields only step-completion
+    /// updates, and the output is available from <c>RunAsync</c>.
+    /// </summary>
+    public bool SupportsTokenStreaming => _nodes.Count > 0 && _nodes[^1].Stream is not null;
+
     internal Chain(
         string name,
         IChatClient chatClient,
@@ -170,6 +177,7 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        using var chainActivity = ChainActivitySource.StartChain(Name);
         object? current = input;
         for (var i = 0; i < _nodes.Count; i++)
         {
@@ -178,7 +186,7 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
 
             if (isTerminal && node.Stream is not null)
             {
-                using var activity = ChainActivitySource.StartStep(Name, node.Name, i);
+                using var activity = ChainActivitySource.StartStep(Name, node.Name, i, chainActivity);
                 var enumerator = node.Stream(current, context, cancellationToken).GetAsyncEnumerator(cancellationToken);
                 try
                 {
@@ -195,7 +203,8 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
                         }
                         catch (Exception ex)
                         {
-                            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                            ChainActivitySource.RecordFailure(activity, ex);
+                            ChainActivitySource.RecordFailure(chainActivity, ex);
                             throw new ChainStepException(node.Name, i, ex);
                         }
 
@@ -216,7 +225,7 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
             }
             else
             {
-                current = await InvokeNodeAsync(node, current, context, i, cancellationToken).ConfigureAwait(false);
+                current = await InvokeNodeAsync(node, current, context, i, chainActivity, cancellationToken).ConfigureAwait(false);
                 yield return new ChainUpdate { StepName = node.Name, StepIndex = i, IsStepComplete = true };
             }
         }
@@ -224,18 +233,19 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
 
     private async ValueTask<object?> ExecuteNodesAsync(object? input, ChainContext context, CancellationToken cancellationToken)
     {
+        using var chainActivity = ChainActivitySource.StartChain(Name);
         object? current = input;
         for (var i = 0; i < _nodes.Count; i++)
         {
-            current = await InvokeNodeAsync(_nodes[i], current, context, i, cancellationToken).ConfigureAwait(false);
+            current = await InvokeNodeAsync(_nodes[i], current, context, i, chainActivity, cancellationToken).ConfigureAwait(false);
         }
 
         return current;
     }
 
-    private async ValueTask<object?> InvokeNodeAsync(StepNode node, object? current, ChainContext context, int index, CancellationToken cancellationToken)
+    private async ValueTask<object?> InvokeNodeAsync(StepNode node, object? current, ChainContext context, int index, Activity? chainActivity, CancellationToken cancellationToken)
     {
-        using var activity = ChainActivitySource.StartStep(Name, node.Name, index);
+        using var activity = ChainActivitySource.StartStep(Name, node.Name, index, chainActivity);
         try
         {
             return await node.Invoke(current, context, cancellationToken).ConfigureAwait(false);
@@ -244,15 +254,18 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
         {
             throw;
         }
-        catch (ChainStepException)
+        catch (ChainStepException ex)
         {
             // Already carries a step name/index — e.g. from a nested chain's own InvokeNodeAsync
             // (Branch, Then(IChainStep<,>)). Re-wrapping here would bury the real failing step.
+            ChainActivitySource.RecordFailure(activity, ex);
+            ChainActivitySource.RecordFailure(chainActivity, ex);
             throw;
         }
         catch (Exception ex)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            ChainActivitySource.RecordFailure(activity, ex);
+            ChainActivitySource.RecordFailure(chainActivity, ex);
             throw new ChainStepException(node.Name, index, ex);
         }
     }

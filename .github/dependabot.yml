@@ -6,10 +6,15 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     groups:
+      # Packages that pin each other transitively (central transitive pinning turns a lone bump into an
+      # NU1109 downgrade error), so they're always bumped together in one PR.
       microsoft-extensions:
         patterns:
           - "Microsoft.Extensions.*"
           - "Microsoft.Agents.*"
+          - "ModelContextProtocol*"
+          - "OpenAI"
+          - "Azure.AI.OpenAI"
 
   - package-ecosystem: "github-actions"
     directory: "/"
