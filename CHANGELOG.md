@@ -24,6 +24,8 @@ improvements from a design review. No public API was removed or changed (package
 - Telemetry: each run now emits a `cognichain.chain <name>` span with the step spans as its children,
   for both `RunAsync` and `RunStreamingAsync`. Failures record `error.type` and an `exception` event.
   New public method `ChainActivitySource.StartChain`.
+- `Chain<TIn, TOut>.SupportsTokenStreaming`: tells you whether `RunStreamingAsync` will stream model tokens
+  (it does only when the last step is a plain-text `Prompt`).
 - First test suite for `CogniChain.Agents`, plus tests for `AddChain`, `AsAIFunction`, history reducers
   inherited by `Branch`, the new telemetry spans, and the new JSON options.
 
@@ -41,6 +43,12 @@ improvements from a design review. No public API was removed or changed (package
 
 ### Changed
 
+- Behavior change: a dictionary passed to a prompt step (or to `PromptTemplate.Render(object)`) is now
+  read by key. Before, it was reflected like any other object, exposing only `Count`, `Keys` and similar
+  properties as placeholders. This applies to `IReadOnlyDictionary<string, string?>` and
+  `IEnumerable<KeyValuePair<string, object?>>` (so `Dictionary<string, string>` and
+  `Dictionary<string, object?>`). A dictionary with other value types, e.g. `Dictionary<string, int>`,
+  is still reflected.
 - `Microsoft.Extensions.AI` 10.11.0 → 11.0.1, `Microsoft.Agents.AI` 1.19.0 → 1.28.0,
   `ModelContextProtocol` 2.2.0 → 2.4.0, `OpenAI` 2.14.0 → 2.15.0, `Microsoft.Extensions.*` → 11.0.x,
   `xunit.v3` → 4.0.3; SDK pinned to 11.0.100.

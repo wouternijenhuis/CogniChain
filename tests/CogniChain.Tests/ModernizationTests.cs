@@ -168,6 +168,17 @@ public class ModernizationTests
         Assert.Equal("Question", client.Requests[0][^1].Text);
     }
 
+    [Fact]
+    public void SupportsTokenStreaming_IsTrueOnlyWhenTheLastStepIsAPlainTextPrompt()
+    {
+        var client = new FakeChatClient();
+
+        Assert.True(Chain.Create<string>(client).Then<string>(s => s).Prompt("p").Build().SupportsTokenStreaming);
+        Assert.False(Chain.Create<string>(client).Prompt("p").Then<string>(s => s).Build().SupportsTokenStreaming);
+        Assert.False(Chain.Create(client).Prompt<WindReport>("p").Build().SupportsTokenStreaming);
+        Assert.False(Chain.Create<string>(client).Build().SupportsTokenStreaming);
+    }
+
     /// <summary>Collects stopped CogniChain activities belonging to one chain, so parallel tests don't interfere.</summary>
     private sealed class ActivityRecorder : IDisposable
     {

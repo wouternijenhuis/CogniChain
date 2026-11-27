@@ -27,7 +27,7 @@ internal sealed class ChainChatClient(Chain<string, string> chain) : IChatClient
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (!_chain.IsTerminalStepStreamable)
+        if (!_chain.SupportsTokenStreaming)
         {
             // Only a plain-text Prompt step streams tokens; any other terminal step (Then, Map, Branch,
             // Prompt<T>) produces its value as a whole, so run the chain once and surface that value.

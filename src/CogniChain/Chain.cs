@@ -49,8 +49,12 @@ public sealed class Chain<TIn, TOut> : IChainStep<TIn, TOut>
     /// <summary>Gets the chain's name, used in telemetry and in <see cref="ChainStepException"/>.</summary>
     public string Name { get; }
 
-    /// <summary>Gets whether <c>RunStreamingAsync</c> streams tokens from the terminal step (a plain-text <c>Prompt</c>).</summary>
-    internal bool IsTerminalStepStreamable => _nodes.Count > 0 && _nodes[^1].Stream is not null;
+    /// <summary>
+    /// Gets whether <c>RunStreamingAsync</c> streams model tokens: <see langword="true"/> when the chain's
+    /// last step is a plain-text <c>.Prompt(string)</c>. Otherwise the run yields only step-completion
+    /// updates, and the output is available from <c>RunAsync</c>.
+    /// </summary>
+    public bool SupportsTokenStreaming => _nodes.Count > 0 && _nodes[^1].Stream is not null;
 
     internal Chain(
         string name,

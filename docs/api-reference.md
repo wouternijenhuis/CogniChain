@@ -70,6 +70,7 @@ to an agent framework.
 | `RunAsync(TIn input, ChainContext context, CancellationToken ct = default)` | `Task<ChainResult<TOut>>` — reused context, carries history |
 | `RunStreamingAsync(TIn input, CancellationToken ct = default)` | `IAsyncEnumerable<ChainUpdate>` |
 | `RunStreamingAsync(TIn input, ChainContext context, CancellationToken ct = default)` | `IAsyncEnumerable<ChainUpdate>` |
+| `SupportsTokenStreaming` | `bool` — `true` when the last step is a plain-text `Prompt`, i.e. `RunStreamingAsync` streams model tokens |
 
 ## `ChainContext`
 
